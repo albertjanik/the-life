@@ -393,3 +393,24 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 .board-row .sub{font-size:13px;color:var(--ink-3)}
 .member-chip{display:flex;align-items:center;gap:7px;padding:4px 9px;border:1px solid var(--line);border-radius:999px;font-size:13px}
 .busy{opacity:.55;pointer-events:none}
+
+/* ---------- clickable task pieces ---------- */
+.t-open{
+  display:block;text-align:left;width:100%;font-weight:500;line-height:1.35;color:inherit;
+  border-radius:5px;padding:0;
+}
+.t-open:hover{text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
+.task.done .t-open{text-decoration:line-through}
+.sec-link{color:var(--cat-fg);font-weight:600;font-size:inherit;border-radius:4px}
+.sec-link:hover{text-decoration:underline;text-underline-offset:2px}
+.hab-name .sec-link{color:var(--ink-3);font-weight:500}
+.hab-name .sec-link:hover{color:var(--cat-fg)}
+button.cal-ev{width:100%;cursor:pointer;font-family:inherit}
+button.cal-ev:hover{filter:brightness(.95);border-left-width:3px}
+label.check{
+  display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;
+  font-family:inherit;font-size:14px;color:var(--ink);cursor:pointer;
+}
+label.check input{width:auto}
+.modal-foot{flex-wrap:wrap}
+.modal-foot .btn{white-space:nowrap}

@@ -4,6 +4,8 @@
 const { createClient } = window.supabase;   // vendor/supabase.js (supabase-js v2)
 
 const CFG = window.THE_LIFE_CONFIG || {};
+const I18N = window.THE_LIFE_I18N;
+const DEFAULTS = window.THE_LIFE_DEFAULTS;
 const root = document.getElementById("root");
 
 /* ------------------------------------------------------------- utilities */
@@ -20,6 +22,55 @@ function toast(msg) {
   t._h = setTimeout(() => t.classList.remove("on"), 2600);
 }
 
+/* ------------------------------------------------------------- language */
+
+function detectLang() {
+  try {
+    const saved = localStorage.getItem("thelife-lang");
+    if (saved && I18N[saved]) return saved;
+  } catch {}
+  return (navigator.language || "en").toLowerCase().startsWith("pl") ? "pl" : "en";
+}
+
+let lang = detectLang();
+
+function t(key, vars) {
+  let s = (I18N[lang] && I18N[lang][key]) ?? I18N.en[key] ?? key;
+  if (vars) for (const k in vars) s = s.replaceAll(`{${k}}`, vars[k]);
+  return s;
+}
+
+function setLang(next) {
+  lang = I18N[next] ? next : "en";
+  try { localStorage.setItem("thelife-lang", lang); } catch {}
+  document.documentElement.setAttribute("lang", lang);
+}
+document.documentElement.setAttribute("lang", lang);
+
+/* Section names and descriptions are data. Translate only the seeded defaults,
+   so a section someone renamed keeps exactly the name they gave it. */
+function sectionName(s) {
+  const def = DEFAULTS.sections[s?.key];
+  if (def && s.name === def.en) return def[lang] || def.en;
+  return s?.name || "—";
+}
+function sectionCode(s) {
+  const def = DEFAULTS.sections[s?.key];
+  if (def && s.name === def.en && def.code) return def.code[lang] || def.code.en;
+  return s?.code || "??";
+}
+function sectionDesc(s) {
+  const def = DEFAULTS.descriptions[s?.key];
+  if (def && s.description === def.en) return def[lang] || def.en;
+  return s?.description || "";
+}
+function habitTarget(h) {
+  const def = DEFAULTS.habitTargets[h?.target];
+  return def ? (def[lang] || def.en) : (h?.target || "");
+}
+
+/* ------------------------------------------------------------- dates */
+
 const DAY = 86400000;
 const today = new Date(); today.setHours(0, 0, 0, 0);
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -27,25 +78,46 @@ const parseDate = (s) => { const [y, m, d] = String(s).split("-").map(Number); r
 const off = (n) => { const d = new Date(today); d.setDate(d.getDate() + n); return iso(d); };
 const diff = (s) => Math.round((parseDate(s) - today) / DAY);
 
-const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const MONL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const plural = (n, w) => (n === 1 ? w : w + "s");
+const NAMES = {
+  en: {
+    monthShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    monthLong: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    monthOfDay: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    dow: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    dowShort: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+  },
+  pl: {
+    monthShort: ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"],
+    monthLong: ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"],
+    monthOfDay: ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia", "września", "października", "listopada", "grudnia"],
+    dow: ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"],
+    dowShort: ["pon", "wt", "śr", "czw", "pt", "sob", "ndz"]
+  }
+};
+const names = () => NAMES[lang] || NAMES.en;
 
 function human(s) {
   const n = diff(s), d = parseDate(s);
-  if (n === 0) return "today";
-  if (n === 1) return "tomorrow";
-  if (n === -1) return "1 day overdue";
-  if (n < 0) return `${Math.abs(n)} days overdue`;
-  if (n < 7) return DOW[d.getDay()];
-  return `${d.getDate()} ${MON[d.getMonth()]}`;
+  if (n === 0) return t("today");
+  if (n === 1) return t("tomorrow");
+  if (n === -1) return t("overdue_one");
+  if (n < 0) return t("overdue_many", { n: Math.abs(n) });
+  if (n < 7) return names().dow[d.getDay()];
+  return `${d.getDate()} ${names().monthOfDay[d.getMonth()]}`;
 }
 
-const REC = { daily: "daily", weekly: "weekly", biweekly: "every 2 weeks", monthly: "monthly", quarterly: "quarterly", yearly: "yearly" };
+const countLabel = (n, one, many) => `${n} ${n === 1 ? t(one) : t(many)}`;
 
-function nextDate(s, rec) {
-  const d = parseDate(s);
+const RECUR = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"];
+const recLabel = (r) => t("rec_" + r);
+
+/* Next occurrence.
+   fromCompletion = false → keep the fixed rhythm and catch up past dates.
+   fromCompletion = true  → one period counted from today. */
+function nextDate(task) {
+  const fromCompletion = !!task.recur_from_completion;
+  const rec = task.recurrence;
+  const d = fromCompletion ? new Date(today) : parseDate(task.due_date);
   const step = () => {
     if (rec === "daily") d.setDate(d.getDate() + 1);
     else if (rec === "weekly") d.setDate(d.getDate() + 7);
@@ -55,25 +127,32 @@ function nextDate(s, rec) {
     else if (rec === "yearly") d.setFullYear(d.getFullYear() + 1);
   };
   step();
-  let guard = 0;
-  while (d < today && rec !== "yearly" && guard++ < 400) step();
+  if (!fromCompletion) {
+    let guard = 0;
+    while (d < today && rec !== "yearly" && guard++ < 400) step();
+  }
   return iso(d);
 }
+
+/* ------------------------------------------------------------- theme */
+
+function applyTheme(mode) {
+  if (mode === "light" || mode === "dark") document.documentElement.setAttribute("data-theme", mode);
+  else document.documentElement.removeAttribute("data-theme");
+}
+let theme = "system";
+try { theme = localStorage.getItem("thelife-theme") || "system"; } catch {}
+applyTheme(theme);
 
 /* ------------------------------------------------------------- setup gate */
 
 if (!CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY) {
   root.innerHTML = `<div class="setup">
     <div class="brand" style="margin-bottom:14px"><div class="brand-mark">TL</div><div class="brand-name">The Life</div></div>
-    <h1>Almost there — connect a database</h1>
-    <p style="color:var(--ink-2)">The app needs a free Supabase project to keep accounts and shared data. It takes about five minutes, all in the browser.</p>
-    <ol>
-      <li>Create a project at <strong>supabase.com</strong>.</li>
-      <li>Open <strong>SQL Editor → New query</strong>, paste everything from <code>supabase/schema.sql</code> and press <strong>Run</strong>.</li>
-      <li>Open <strong>Project Settings → API</strong> and copy the <strong>Project URL</strong> and the <strong>anon public</strong> key.</li>
-      <li>Paste both into <code>config.js</code> and reload this page.</li>
-    </ol>
-    <p class="hint">Full walkthrough: see the README in the repository.</p>
+    <h1>${esc(t("setup_title"))}</h1>
+    <p style="color:var(--ink-2)">${esc(t("setup_lede"))}</p>
+    <ol><li>${t("setup_1")}</li><li>${t("setup_2")}</li><li>${t("setup_3")}</li><li>${t("setup_4")}</li></ol>
+    <p class="hint">${esc(t("setup_more"))}</p>
   </div>`;
   throw new Error("The Life: config.js is not filled in yet.");
 }
@@ -97,17 +176,21 @@ const state = {
   tab: "tasks",
   calMonth: new Date(today.getFullYear(), today.getMonth(), 1),
   live: false,
-  authTab: "in"
+  authTab: "in",
+  recovery: false
 };
 
 const secById = (id) => state.sections.find((s) => s.id === id) || { name: "—", hue: 163, code: "??", description: "" };
 const memberById = (id) => state.members.find((m) => m.user_id === id);
 const me = () => memberById(state.user?.id);
+const taskById = (id) => state.tasks.find((x) => x.id === id);
 
 function initials(name) {
   const parts = String(name || "?").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   return ((parts[0]?.[0] || "?") + (parts[1]?.[0] || "")).toUpperCase();
 }
+const displayName = () =>
+  state.user?.user_metadata?.display_name || (state.user?.email || "").split("@")[0] || "Me";
 
 /* ------------------------------------------------------------- auth screens */
 
@@ -117,37 +200,73 @@ function renderAuth(msg, err) {
     <div class="auth-art">
       <div class="brand"><div class="brand-mark">TL</div><div class="brand-name">The Life</div></div>
       <div class="auth-lede">
-        <h1>Your whole life, on one board.</h1>
-        <p>Learning, the house, the car, money, dreams and future trips — kept together with the person you share your life with. Every task, with dates and repeats, lands on a single timeline.</p>
+        <h1>${esc(t("hero_title"))}</h1>
+        <p>${esc(t("hero_lede"))}</p>
       </div>
       <div class="art-grid">
-        <div class="art-cell" style="--h:210"><div class="k">Car</div><div class="v">Inspection</div><div class="s">a date neither of you forgets</div></div>
-        <div class="art-cell" style="--h:38"><div class="k">Finances</div><div class="v">Bills</div><div class="s">repeating, on their own</div></div>
-        <div class="art-cell" style="--h:230"><div class="k">Learning</div><div class="v">Exams</div><div class="s">progress you can see</div></div>
-        <div class="art-cell" style="--h:196"><div class="k">Travel</div><div class="v">Someday</div><div class="s">plans that stay alive</div></div>
+        <div class="art-cell" style="--h:210"><div class="k">${esc(t("hero_car"))}</div><div class="v">${esc(t("hero_car_v"))}</div><div class="s">${esc(t("hero_car_s"))}</div></div>
+        <div class="art-cell" style="--h:38"><div class="k">${esc(t("hero_fin"))}</div><div class="v">${esc(t("hero_fin_v"))}</div><div class="s">${esc(t("hero_fin_s"))}</div></div>
+        <div class="art-cell" style="--h:230"><div class="k">${esc(t("hero_learn"))}</div><div class="v">${esc(t("hero_learn_v"))}</div><div class="s">${esc(t("hero_learn_s"))}</div></div>
+        <div class="art-cell" style="--h:196"><div class="k">${esc(t("hero_travel"))}</div><div class="v">${esc(t("hero_travel_v"))}</div><div class="s">${esc(t("hero_travel_s"))}</div></div>
       </div>
     </div>
     <div class="auth-form">
       <div class="tabs tabs-auth">
-        <button class="tab ${state.authTab === "in" ? "on" : ""}" data-act="auth-tab" data-tab="in">Sign in</button>
-        <button class="tab ${state.authTab === "up" ? "on" : ""}" data-act="auth-tab" data-tab="up">Create account</button>
+        <button class="tab ${state.authTab === "in" ? "on" : ""}" data-act="auth-tab" data-tab="in">${esc(t("sign_in"))}</button>
+        <button class="tab ${state.authTab === "up" ? "on" : ""}" data-act="auth-tab" data-tab="up">${esc(t("create_account"))}</button>
+        ${state.authTab === "reset" ? `<button class="tab on" data-act="auth-tab" data-tab="reset">${esc(t("reset_password"))}</button>` : ""}
       </div>
       ${err ? `<div class="err">${esc(err)}</div>` : ""}
       ${msg ? `<div class="ok-msg">${esc(msg)}</div>` : ""}
-      ${state.authTab === "up" ? `<div class="field"><label for="a-name">Your name</label><input id="a-name" type="text" placeholder="How your partner will see you" autocomplete="name"></div>` : ""}
-      <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="email"></div>
-      <div class="field"><label for="a-pass">Password</label><input id="a-pass" type="password" autocomplete="${state.authTab === "up" ? "new-password" : "current-password"}"></div>
-      <button class="btn btn-primary" data-act="${state.authTab === "up" ? "sign-up" : "sign-in"}">${state.authTab === "up" ? "Create account" : "Sign in"}</button>
-      <p class="hint">${state.authTab === "up"
-        ? "Both of you create your own account. One of you makes the board, the other joins it with an invite code."
-        : "Signed in on any device, you land on the same board."}</p>
+      ${state.authTab === "reset" ? `
+        <p style="color:var(--ink-2);margin:0">${esc(t("reset_intro"))}</p>
+        <div class="field"><label for="a-email">${esc(t("email"))}</label><input id="a-email" type="email" autocomplete="email"></div>
+        <button class="btn btn-primary" data-act="send-reset">${esc(t("send_reset_link"))}</button>
+        <button class="btn btn-ghost" data-act="auth-tab" data-tab="in">${esc(t("back_to_sign_in"))}</button>
+      ` : `
+        ${state.authTab === "up" ? `<div class="field"><label for="a-name">${esc(t("your_name"))}</label><input id="a-name" type="text" placeholder="${esc(t("name_placeholder"))}" autocomplete="name"></div>` : ""}
+        <div class="field"><label for="a-email">${esc(t("email"))}</label><input id="a-email" type="email" autocomplete="email"></div>
+        <div class="field"><label for="a-pass">${esc(t("password"))}</label><input id="a-pass" type="password" autocomplete="${state.authTab === "up" ? "new-password" : "current-password"}"></div>
+        <button class="btn btn-primary" data-act="${state.authTab === "up" ? "sign-up" : "sign-in"}">${esc(state.authTab === "up" ? t("create_account") : t("sign_in"))}</button>
+        ${state.authTab === "in" ? `<button class="btn btn-ghost" data-act="auth-tab" data-tab="reset">${esc(t("forgot_password"))}</button>` : ""}
+        <p class="hint">${esc(state.authTab === "up" ? t("hint_sign_up") : t("hint_sign_in"))}</p>
+      `}
+      <div class="row" style="gap:6px;margin-top:4px">
+        ${["en", "pl"].map((l) => `<button class="fchip${lang === l ? " on" : ""}" data-act="lang" data-lang="${l}">${l === "en" ? "English" : "Polski"}</button>`).join("")}
+      </div>
     </div>`;
   ($("a-name") || $("a-email"))?.focus();
 }
 
+/* Screen shown after following the link from the reset email. */
+function renderNewPassword(msg, err) {
+  root.className = "auth";
+  root.innerHTML = `
+    <div class="auth-art">
+      <div class="brand"><div class="brand-mark">TL</div><div class="brand-name">The Life</div></div>
+      <div class="auth-lede">
+        <h1>${esc(t("set_new_password"))}</h1>
+        <p>${esc(t("set_new_password_lede"))}</p>
+      </div>
+      <div class="art-grid" style="grid-template-columns:1fr">
+        <div class="art-cell" style="--h:163"><div class="k">${esc(t("reminder"))}</div><div class="v">${esc(t("at_least_6"))}</div><div class="s">${esc(t("longer_better"))}</div></div>
+      </div>
+    </div>
+    <div class="auth-form">
+      <h1 style="font-size:26px">${esc(t("new_password"))}</h1>
+      ${err ? `<div class="err">${esc(err)}</div>` : ""}
+      ${msg ? `<div class="ok-msg">${esc(msg)}</div>` : ""}
+      <div class="field"><label for="np-1">${esc(t("new_password"))}</label><input id="np-1" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="np-2">${esc(t("repeat_it"))}</label><input id="np-2" type="password" autocomplete="new-password"></div>
+      <button class="btn btn-primary" data-act="save-password">${esc(t("save_password"))}</button>
+      <button class="btn btn-ghost" data-act="cancel-recovery">${esc(t("cancel"))}</button>
+    </div>`;
+  $("np-1")?.focus();
+}
+
 async function signIn() {
   const email = $("a-email").value.trim(), password = $("a-pass").value;
-  if (!email || !password) return renderAuth(null, "Enter your email and password.");
+  if (!email || !password) return renderAuth(null, t("err_need_credentials"));
   root.classList.add("busy");
   const { error } = await sb.auth.signInWithPassword({ email, password });
   root.classList.remove("busy");
@@ -157,16 +276,42 @@ async function signIn() {
 async function signUp() {
   const email = $("a-email").value.trim(), password = $("a-pass").value;
   const display_name = ($("a-name")?.value || "").trim();
-  if (!email || !password) return renderAuth(null, "Enter your email and password.");
-  if (password.length < 6) return renderAuth(null, "Password needs at least 6 characters.");
+  if (!email || !password) return renderAuth(null, t("err_need_credentials"));
+  if (password.length < 6) return renderAuth(null, t("err_password_short"));
   root.classList.add("busy");
   const { data, error } = await sb.auth.signUp({ email, password, options: { data: { display_name } } });
   root.classList.remove("busy");
   if (error) return renderAuth(null, error.message);
   if (!data.session) {
     state.authTab = "in";
-    return renderAuth("Account created. Confirm the email we sent, then sign in.");
+    return renderAuth(t("account_created"));
   }
+}
+
+async function sendReset() {
+  const email = $("a-email").value.trim();
+  if (!email) return renderAuth(null, t("err_need_email"));
+  root.classList.add("busy");
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+  root.classList.remove("busy");
+  state.authTab = "in";
+  if (error) return renderAuth(null, error.message);
+  renderAuth(t("reset_sent"));
+}
+
+async function savePassword() {
+  const p1 = $("np-1").value, p2 = $("np-2").value;
+  if (p1.length < 6) return renderNewPassword(null, t("err_password_short"));
+  if (p1 !== p2) return renderNewPassword(null, t("err_passwords_differ"));
+  root.classList.add("busy");
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  root.classList.remove("busy");
+  if (error) return renderNewPassword(null, error.message);
+  state.recovery = false;
+  history.replaceState(null, "", window.location.pathname + window.location.search);
+  toast(t("password_changed"));
+  renderBoardPicker();
 }
 
 /* ------------------------------------------------------------- board picker */
@@ -184,49 +329,51 @@ async function loadBoards() {
 async function renderBoardPicker(err) {
   root.className = "auth";
   state.boards = await loadBoards();
-  const name = state.user?.user_metadata?.display_name || state.user?.email || "";
   root.innerHTML = `
     <div class="auth-art">
       <div class="brand"><div class="brand-mark">TL</div><div class="brand-name">The Life</div></div>
       <div class="auth-lede">
-        <h1>One board, two people.</h1>
-        <p>A board belongs to the household, not to one person. Create one and send the invite code — whoever enters it sees the same sections, tasks and habits, live.</p>
+        <h1>${esc(t("boards_title"))}</h1>
+        <p>${esc(t("boards_lede"))}</p>
       </div>
       <div class="art-grid" style="grid-template-columns:1fr">
-        <div class="art-cell" style="--h:163"><div class="k">Owner</div><div class="v">Full access</div><div class="s">creates the board, shares the code</div></div>
-        <div class="art-cell" style="--h:288"><div class="k">Member</div><div class="v">Full access</div><div class="s">joins with the code, edits everything</div></div>
+        <div class="art-cell" style="--h:163"><div class="k">${esc(t("role_owner"))}</div><div class="v">${esc(t("full_access"))}</div><div class="s">${esc(t("owner_desc"))}</div></div>
+        <div class="art-cell" style="--h:288"><div class="k">${esc(t("role_member"))}</div><div class="v">${esc(t("full_access"))}</div><div class="s">${esc(t("member_desc"))}</div></div>
       </div>
     </div>
     <div class="auth-form">
       <div class="row" style="justify-content:space-between">
-        <div><h1 style="font-size:26px">Your boards</h1>
-        <p class="hint" style="margin:4px 0 0">Signed in as <strong>${esc(state.user?.email || "")}</strong></p></div>
-        <button class="btn btn-ghost btn-sm" data-act="sign-out">Sign out</button>
+        <div><h1 style="font-size:26px">${esc(t("your_boards"))}</h1>
+        <p class="hint" style="margin:4px 0 0">${esc(t("signed_in_as"))} <strong>${esc(state.user?.email || "")}</strong></p></div>
+        <div class="row" style="gap:6px">
+          <button class="btn btn-ghost btn-sm" data-act="settings">${esc(t("settings"))}</button>
+          <button class="btn btn-ghost btn-sm" data-act="sign-out">${esc(t("sign_out"))}</button>
+        </div>
       </div>
       ${err ? `<div class="err">${esc(err)}</div>` : ""}
       ${state.boards.length
         ? `<div class="panel-pick">${state.boards.map((b) => `
             <button class="board-row" data-act="open-board" data-id="${b.id}">
               <span class="chip chip-lg" style="--h:163">${esc(initials(b.name))}</span>
-              <span><span class="nm">${esc(b.name)}</span><br><span class="sub mono">${esc(b.invite_code)} · ${esc(b.role)}</span></span>
+              <span><span class="nm">${esc(b.name)}</span><br><span class="sub mono">${esc(b.invite_code)} · ${esc(b.role === "owner" ? t("role_owner") : t("role_member"))}</span></span>
             </button>`).join("")}</div>`
-        : `<div class="empty">No boards yet. Create one, or join with a code your partner sent you.</div>`}
-      <div class="divider">create or join</div>
+        : `<div class="empty">${esc(t("no_boards"))}</div>`}
+      <div class="divider">${esc(t("create_or_join"))}</div>
       <div class="panel-pick">
         <div class="pick-card">
-          <h3>Create a board</h3>
-          <p>Comes with eleven ready sections — rename or ignore whichever you like.</p>
+          <h3>${esc(t("create_board"))}</h3>
+          <p>${esc(t("create_board_desc"))}</p>
           <div class="row" style="margin-top:6px">
-            <input type="text" id="new-board" placeholder="e.g. ${esc(name.split("@")[0] || "Our")} &amp; me" style="flex:1">
-            <button class="btn btn-primary btn-sm" data-act="create-board">Create</button>
+            <input type="text" id="new-board" placeholder="${esc(t("our_board"))}" style="flex:1">
+            <button class="btn btn-primary btn-sm" data-act="create-board">${esc(t("create"))}</button>
           </div>
         </div>
         <div class="pick-card">
-          <h3>Join with a code</h3>
-          <p>Enter the invite code from the other person's board.</p>
+          <h3>${esc(t("join_with_code"))}</h3>
+          <p>${esc(t("join_with_code_desc"))}</p>
           <div class="row" style="margin-top:6px">
             <input type="text" id="join-code" class="mono" placeholder="HOME-4K2P" style="flex:1">
-            <button class="btn btn-ghost btn-sm" data-act="join-board">Join</button>
+            <button class="btn btn-ghost btn-sm" data-act="join-board">${esc(t("join"))}</button>
           </div>
         </div>
       </div>
@@ -234,7 +381,7 @@ async function renderBoardPicker(err) {
 }
 
 async function createBoard() {
-  const name = $("new-board").value.trim() || "Our board";
+  const name = $("new-board").value.trim() || t("our_board");
   root.classList.add("busy");
   const { data, error } = await sb.rpc("create_board", { p_name: name, p_display_name: displayName() });
   root.classList.remove("busy");
@@ -244,17 +391,14 @@ async function createBoard() {
 
 async function joinBoard() {
   const code = $("join-code").value.trim();
-  if (!code) return renderBoardPicker("Enter the invite code first.");
+  if (!code) return renderBoardPicker(t("err_need_code"));
   root.classList.add("busy");
   const { data, error } = await sb.rpc("join_board", { p_code: code, p_display_name: displayName() });
   root.classList.remove("busy");
-  if (error) return renderBoardPicker(error.message.includes("not found") ? "No board with that code." : error.message);
-  toast("Joined the board.");
+  if (error) return renderBoardPicker(error.message.includes("not found") ? t("err_code_unknown") : error.message);
+  toast(t("joined_board"));
   await openBoard(data);
 }
-
-const displayName = () =>
-  state.user?.user_metadata?.display_name || (state.user?.email || "").split("@")[0] || "Me";
 
 /* ------------------------------------------------------------- data loading */
 
@@ -314,7 +458,7 @@ function subscribe(boardId) {
   channel.subscribe((status) => {
     state.live = status === "SUBSCRIBED";
     const led = document.querySelector(".sync");
-    if (led) { led.classList.toggle("off", !state.live); led.lastChild.textContent = state.live ? " live" : " offline"; }
+    if (led) { led.classList.toggle("off", !state.live); led.lastElementChild.textContent = state.live ? t("live") : t("offline"); }
   });
 }
 
@@ -329,56 +473,66 @@ async function run(promise, okMsg) {
 
 const boardId = () => state.board.id;
 
-async function addTask({ title, section_id, due_date, recurrence, assignee_id, important }) {
-  if (!title.trim()) return toast("Type what needs doing first.");
+async function addTask(draft) {
+  if (!draft.title.trim()) return toast(t("err_need_title"));
   const row = {
-    board_id: boardId(), section_id, title: title.trim(), due_date: due_date || off(0),
-    recurrence: recurrence || null, assignee_id: assignee_id || null,
-    important: !!important, created_by: state.user.id
+    board_id: boardId(), section_id: draft.section_id, title: draft.title.trim(),
+    due_date: draft.due_date || off(0), recurrence: draft.recurrence || null,
+    recur_from_completion: !!draft.recur_from_completion,
+    assignee_id: draft.assignee_id || null, important: !!draft.important, created_by: state.user.id
   };
-  state.tasks.push({ ...row, id: "tmp" + Math.random(), done: false });
+  state.tasks = state.tasks.concat([{ ...row, id: "tmp" + Math.random(), done: false }]);
   renderApp();
-  await run(sb.from("tasks").insert(row), `Added to “${secById(section_id).name}”.`);
+  await run(sb.from("tasks").insert(row), t("added_to", { section: sectionName(secById(draft.section_id)) }));
+  await refreshAll(); renderApp();
+}
+
+async function updateTask(id, patch, okMsg) {
+  const task = taskById(id);
+  if (task) Object.assign(task, patch);
+  renderApp();
+  await run(sb.from("tasks").update(patch).eq("id", id), okMsg);
   await refreshAll(); renderApp();
 }
 
 async function toggleTask(id) {
-  const t = state.tasks.find((x) => x.id === id);
-  if (!t) return;
-  if (t.recurrence && !t.done) {
-    const nd = nextDate(t.due_date, t.recurrence);
-    t.due_date = nd; renderApp();
-    await run(sb.from("tasks").update({ due_date: nd }).eq("id", id), `Done. Next time: ${human(nd)}.`);
+  const task = taskById(id);
+  if (!task) return;
+  if (task.recurrence && !task.done) {
+    const nd = nextDate(task);
+    task.due_date = nd; renderApp();
+    await run(sb.from("tasks").update({ due_date: nd }).eq("id", id), t("next_time", { when: human(nd) }));
   } else {
-    const done = !t.done;
-    t.done = done; renderApp();
-    await run(sb.from("tasks").update({ done, done_at: done ? new Date().toISOString() : null }).eq("id", id));
+    const done = !task.done;
+    task.done = done; renderApp();
+    await run(sb.from("tasks").update({ done, done_at: done ? new Date().toISOString() : null }).eq("id", id),
+      done ? t("task_closed") : null);
   }
 }
 
 async function deleteTask(id) {
-  state.tasks = state.tasks.filter((t) => t.id !== id); renderApp();
-  await run(sb.from("tasks").delete().eq("id", id), "Task deleted.");
+  state.tasks = state.tasks.filter((x) => x.id !== id); renderApp();
+  await run(sb.from("tasks").delete().eq("id", id), t("task_deleted"));
 }
 
 async function addNote(section_id) {
   const title = $("nt-title").value.trim(), body = $("nt-body").value.trim();
-  if (!title) return toast("A note needs a title.");
-  await run(sb.from("notes").insert({ board_id: boardId(), section_id, title, body, created_by: state.user.id }), "Note saved.");
+  if (!title) return toast(t("err_note_title"));
+  await run(sb.from("notes").insert({ board_id: boardId(), section_id, title, body, created_by: state.user.id }), t("note_saved"));
   await refreshAll(); renderApp();
 }
 
 async function deleteNote(id) {
   state.notes = state.notes.filter((n) => n.id !== id); renderApp();
-  await run(sb.from("notes").delete().eq("id", id), "Note deleted.");
+  await run(sb.from("notes").delete().eq("id", id), t("note_deleted"));
 }
 
 async function addHabit() {
   const name = $("hb-name").value.trim();
-  if (!name) return toast("Give the habit a name.");
+  if (!name) return toast(t("err_habit_name"));
   const section_id = $("hb-sec").value;
   const assignee_id = $("hb-who").value === "shared" ? null : $("hb-who").value;
-  await run(sb.from("habits").insert({ board_id: boardId(), section_id, name, assignee_id, target: "every day" }), "Habit added.");
+  await run(sb.from("habits").insert({ board_id: boardId(), section_id, name, assignee_id, target: "every day" }), t("habit_added"));
   await refreshAll(); renderApp();
 }
 
@@ -396,12 +550,20 @@ async function toggleHabitDay(habit_id, day) {
 async function addSection(name) {
   const key = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24) || "section" + Date.now();
   const hue = Math.floor(Math.random() * 360);
-  const code = name.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase() || "NS";
+  const code = name.replace(/[^\p{L}]/gu, "").slice(0, 2).toUpperCase() || "NS";
   await run(sb.from("sections").insert({
     board_id: boardId(), key, name, code, hue, description: "",
     position: (state.sections.at(-1)?.position || 0) + 1
-  }), `Section “${name}” added.`);
+  }), t("section_added", { name }));
   await refreshAll(); renderApp();
+}
+
+async function saveMemberName(name) {
+  const clean = name.trim();
+  if (!clean || !state.board) return;
+  await sb.from("board_members").update({ display_name: clean })
+    .eq("board_id", boardId()).eq("user_id", state.user.id);
+  await refreshAll();
 }
 
 /* ------------------------------------------------------------- view helpers */
@@ -411,68 +573,72 @@ function whoOk(row) {
   if (state.who === "shared") return row.assignee_id === null;
   return row.assignee_id === state.who || row.assignee_id === null;
 }
-const openTasks = () => state.tasks.filter((t) => !t.done && whoOk(t));
+const openTasks = () => state.tasks.filter((x) => !x.done && whoOk(x));
 
 function whoBadge(assignee_id) {
-  if (!assignee_id) return `<span class="who" style="background:linear-gradient(105deg,hsl(163 45% 32%) 50%,hsl(288 35% 42%) 50%);color:#fff" title="Shared">◑</span>`;
+  if (!assignee_id) return `<span class="who" style="background:linear-gradient(105deg,hsl(163 45% 32%) 50%,hsl(288 35% 42%) 50%);color:#fff" title="${esc(t("shared"))}">◑</span>`;
   const m = memberById(assignee_id);
   const hue = m?.hue ?? 163;
-  return `<span class="who" style="background:hsl(${hue} 42% 35%);color:#fff" title="${esc(m?.display_name || "Member")}">${esc(initials(m?.display_name))}</span>`;
+  return `<span class="who" style="background:hsl(${hue} 42% 35%);color:#fff" title="${esc(m?.display_name || "")}">${esc(initials(m?.display_name))}</span>`;
 }
 
-function taskHTML(t) {
-  const s = secById(t.section_id), n = diff(t.due_date);
+function taskHTML(task) {
+  const s = secById(task.section_id), n = diff(task.due_date);
   const cls = n < 0 ? "od" : n === 0 ? "td" : "";
-  return `<div class="task${t.done ? " done" : ""}" style="--h:${s.hue}" data-id="${t.id}">
-    <button class="tick" data-act="toggle" data-id="${t.id}" aria-label="Mark as done">
-      <svg viewBox="0 0 12 12" fill="none" stroke="${t.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
+  return `<div class="task${task.done ? " done" : ""}" style="--h:${s.hue}" data-id="${task.id}">
+    <button class="tick" data-act="toggle" data-id="${task.id}" aria-label="${esc(t("today"))}">
+      <svg viewBox="0 0 12 12" fill="none" stroke="${task.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
     </button>
-    <div class="t-main"><div class="t-title">${esc(t.title)}</div>
+    <div class="t-main">
+      <button class="t-title t-open" data-act="edit-task" data-id="${task.id}" title="${esc(t("edit_task"))}">${esc(task.title)}</button>
       <div class="t-meta">
-        <span class="sec">${esc(s.name)}</span><span>·</span>
-        <span class="t-date ${cls}">${human(t.due_date)}</span>
-        ${t.recurrence ? `<span class="badge rec">↻ ${REC[t.recurrence]}</span>` : ""}
-        ${t.important ? `<span class="badge pri">important</span>` : ""}
+        <button class="sec sec-link" data-act="go" data-view="section" data-sec="${task.section_id}" title="${esc(t("open_section"))}">${esc(sectionName(s))}</button><span>·</span>
+        <span class="t-date ${cls}">${human(task.due_date)}</span>
+        ${task.recurrence ? `<span class="badge rec">↻ ${esc(recLabel(task.recurrence))}${task.recur_from_completion ? " · " + esc(t("badge_from_done")) : ""}</span>` : ""}
+        ${task.important ? `<span class="badge pri">${esc(t("important"))}</span>` : ""}
       </div>
     </div>
-    ${whoBadge(t.assignee_id)}
-    <button class="del" data-act="del-task" data-id="${t.id}" aria-label="Delete task">×</button>
+    ${whoBadge(task.assignee_id)}
+    <button class="del" data-act="del-task" data-id="${task.id}" aria-label="${esc(t("delete"))}">×</button>
   </div>`;
 }
 
 function groupsHTML(list) {
   const groups = [
-    { k: "overdue", t: "Overdue", items: [] }, { k: "today", t: "Today", items: [] },
-    { k: "tom", t: "Tomorrow", items: [] }, { k: "week", t: "This week", items: [] },
-    { k: "next", t: "Next week", items: [] }, { k: "later", t: "Later", items: [] }
+    { k: "overdue", t: t("group_overdue"), items: [] }, { k: "today", t: t("group_today"), items: [] },
+    { k: "tom", t: t("group_tomorrow"), items: [] }, { k: "week", t: t("group_week"), items: [] },
+    { k: "next", t: t("group_next_week"), items: [] }, { k: "later", t: t("group_later"), items: [] }
   ];
-  [...list].sort((a, b) => (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0)).forEach((t) => {
-    const n = diff(t.due_date);
-    if (n < 0) groups[0].items.push(t);
-    else if (n === 0) groups[1].items.push(t);
-    else if (n === 1) groups[2].items.push(t);
-    else if (n <= 7) groups[3].items.push(t);
-    else if (n <= 14) groups[4].items.push(t);
-    else groups[5].items.push(t);
+  [...list].sort((a, b) => (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0)).forEach((task) => {
+    const n = diff(task.due_date);
+    if (n < 0) groups[0].items.push(task);
+    else if (n === 0) groups[1].items.push(task);
+    else if (n === 1) groups[2].items.push(task);
+    else if (n <= 7) groups[3].items.push(task);
+    else if (n <= 14) groups[4].items.push(task);
+    else groups[5].items.push(task);
   });
   const out = groups.filter((g) => g.items.length).map((g) =>
-    `<section class="tgroup ${g.k}"><div class="tgroup-head"><h3>${g.t}</h3><span class="n">${g.items.length}</span></div>
+    `<section class="tgroup ${g.k}"><div class="tgroup-head"><h3>${esc(g.t)}</h3><span class="n">${g.items.length}</span></div>
      <div class="tlist">${g.items.map(taskHTML).join("")}</div></section>`).join("");
-  return out || `<div class="empty">Nothing here yet. Add the first task with “New task”.</div>`;
+  return out || `<div class="empty">${esc(t("empty_tasks"))}</div>`;
 }
 
 function filtersHTML() {
-  const opts = [["all", "Everyone"], ...state.members.map((m) => [m.user_id, m.display_name]), ["shared", "Shared"]];
+  const opts = [["all", t("everyone")], ...state.members.map((m) => [m.user_id, m.display_name]), ["shared", t("shared")]];
   return `<div class="filters">${opts.map(([v, label]) =>
     `<button class="fchip${state.who === v ? " on" : ""}" data-act="who" data-who="${v}">${esc(label)}</button>`).join("")}</div>`;
 }
 
 function assigneeOptions(selected) {
   return [...state.members.map((m) => `<option value="${m.user_id}"${selected === m.user_id ? " selected" : ""}>${esc(m.display_name)}</option>`),
-    `<option value="shared"${selected === "shared" ? " selected" : ""}>Shared</option>`].join("");
+    `<option value="shared"${selected === "shared" || selected === null ? " selected" : ""}>${esc(t("shared"))}</option>`].join("");
 }
 const sectionOptions = (sel) =>
-  state.sections.map((s) => `<option value="${s.id}"${sel === s.id ? " selected" : ""}>${esc(s.name)}</option>`).join("");
+  state.sections.map((s) => `<option value="${s.id}"${sel === s.id ? " selected" : ""}>${esc(sectionName(s))}</option>`).join("");
+const recurrenceOptions = (sel) =>
+  `<option value="">${esc(t("one_off"))}</option>` +
+  RECUR.map((r) => `<option value="${r}"${sel === r ? " selected" : ""}>${esc(recLabel(r))}</option>`).join("");
 
 const habitDays = (n = 14) => Array.from({ length: n }, (_, i) => off(-(n - 1 - i)));
 const ticked = (h, d) => state.days.has(`${h.id}|${d}`);
@@ -482,62 +648,65 @@ function streak(h) { let s = 0; for (let k = 0; k < 90; k++) { if (ticked(h, off
 
 function viewOverview() {
   const act = openTasks();
-  const od = act.filter((t) => diff(t.due_date) < 0);
-  const td = act.filter((t) => diff(t.due_date) === 0);
-  const wk = act.filter((t) => { const n = diff(t.due_date); return n > 0 && n <= 7; });
+  const od = act.filter((x) => diff(x.due_date) < 0);
+  const td = act.filter((x) => diff(x.due_date) === 0);
+  const wk = act.filter((x) => { const n = diff(x.due_date); return n > 0 && n <= 7; });
   const habToday = state.habits.filter((h) => ticked(h, off(0))).length;
   const next = [...act].sort((a, b) => (a.due_date < b.due_date ? -1 : 1)).slice(0, 6);
   const d = new Date();
+  const dateLine = lang === "pl"
+    ? `${names().dow[d.getDay()].replace(/^./, (c) => c.toUpperCase())}, ${d.getDate()} ${names().monthOfDay[d.getMonth()]} ${d.getFullYear()}`
+    : `${names().dow[d.getDay()]}, ${d.getDate()} ${names().monthLong[d.getMonth()]} ${d.getFullYear()}`;
   return `<div class="row" style="justify-content:space-between;margin-bottom:16px">
-      <div><h2 style="font-size:21px">Hi, ${esc((me()?.display_name || displayName()).split(" ")[0])}.</h2>
-      <p class="hint" style="margin:2px 0 0">${DOW[d.getDay()]}, ${d.getDate()} ${MONL[d.getMonth()]} ${d.getFullYear()}</p></div>
+      <div><h2 style="font-size:21px">${esc(t("hi_name", { name: (me()?.display_name || displayName()).split(" ")[0] }))}</h2>
+      <p class="hint" style="margin:2px 0 0">${esc(dateLine)}</p></div>
       ${filtersHTML()}</div>
     <div class="grid-stats">
-      <div class="stat${od.length ? " crit" : ""}"><div class="k">Overdue</div><div class="v tnum">${od.length}</div><div class="s">${od.length ? "needs attention" : "all on time"}</div></div>
-      <div class="stat warn"><div class="k">Due today</div><div class="v tnum">${td.length}</div><div class="s">${plural(td.length, "task")} scheduled</div></div>
-      <div class="stat"><div class="k">This week</div><div class="v tnum">${wk.length}</div><div class="s">within 7 days</div></div>
-      <div class="stat"><div class="k">Habits today</div><div class="v tnum">${habToday}/${state.habits.length}</div><div class="s">ticked off</div></div>
+      <div class="stat${od.length ? " crit" : ""}"><div class="k">${esc(t("stat_overdue"))}</div><div class="v tnum">${od.length}</div><div class="s">${esc(od.length ? t("stat_overdue_yes") : t("stat_overdue_no"))}</div></div>
+      <div class="stat warn"><div class="k">${esc(t("stat_today"))}</div><div class="v tnum">${td.length}</div><div class="s">${esc(t("stat_today_sub", { n: countLabel(td.length, "task_one", "task_many") }))}</div></div>
+      <div class="stat"><div class="k">${esc(t("stat_week"))}</div><div class="v tnum">${wk.length}</div><div class="s">${esc(t("stat_week_sub"))}</div></div>
+      <div class="stat"><div class="k">${esc(t("stat_habits"))}</div><div class="v tnum">${habToday}/${state.habits.length}</div><div class="s">${esc(t("stat_habits_sub"))}</div></div>
     </div>
     <div class="ov-grid" style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;margin-top:16px">
-      <div class="card"><div class="card-head"><h2>Coming up next</h2><div class="spacer"></div>
-        <button class="btn btn-ghost btn-sm" data-act="go" data-view="upcoming">Full list</button></div>
-        <div class="card-body"><div class="tlist">${next.length ? next.map(taskHTML).join("") : `<div class="empty">Nothing waiting.</div>`}</div></div></div>
-      <div class="card"><div class="card-head"><h2>Habits today</h2></div><div>
+      <div class="card"><div class="card-head"><h2>${esc(t("coming_up"))}</h2><div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" data-act="go" data-view="upcoming">${esc(t("full_list"))}</button></div>
+        <div class="card-body"><div class="tlist">${next.length ? next.map(taskHTML).join("") : `<div class="empty">${esc(t("nothing_waiting"))}</div>`}</div></div></div>
+      <div class="card"><div class="card-head"><h2>${esc(t("habits_today"))}</h2></div><div>
         ${state.habits.length ? state.habits.map((h) => `
           <div class="hab" style="--h:${secById(h.section_id).hue}">
-            <div class="hab-name"><div class="n">${esc(h.name)}</div><div class="s">${esc(h.target)}</div></div>
-            <button class="hcell today${ticked(h, off(0)) ? " on" : ""}" data-act="habit" data-id="${h.id}" data-day="${off(0)}" aria-label="Tick off"></button>
-          </div>`).join("") : `<div class="empty" style="margin:14px">No habits yet.</div>`}
+            <div class="hab-name"><div class="n">${esc(h.name)}</div><div class="s">${esc(habitTarget(h))}</div></div>
+            <button class="hcell today${ticked(h, off(0)) ? " on" : ""}" data-act="habit" data-id="${h.id}" data-day="${off(0)}"></button>
+          </div>`).join("") : `<div class="empty" style="margin:14px">${esc(t("no_habits_yet"))}</div>`}
       </div></div>
     </div>
-    <h2 style="font-size:16px;margin:22px 0 10px">Sections</h2>
+    <h2 style="font-size:16px;margin:22px 0 10px">${esc(t("sections"))}</h2>
     <div class="sec-grid">${state.sections.map((s) => {
-      const n = openTasks().filter((t) => t.section_id === s.id).length;
-      const soon = openTasks().filter((t) => t.section_id === s.id).sort((a, b) => (a.due_date < b.due_date ? -1 : 1))[0];
+      const n = openTasks().filter((x) => x.section_id === s.id).length;
+      const soon = openTasks().filter((x) => x.section_id === s.id).sort((a, b) => (a.due_date < b.due_date ? -1 : 1))[0];
       const notes = state.notes.filter((x) => x.section_id === s.id).length;
       return `<button class="sec-card" style="--h:${s.hue}" data-act="go" data-view="section" data-sec="${s.id}">
-        <div class="row" style="gap:9px"><span class="chip chip-lg">${esc(s.code)}</span><span class="nm">${esc(s.name)}</span></div>
-        <div class="ln mono" style="font-size:12px">${n} ${plural(n, "task")} · ${notes} ${plural(notes, "note")}</div>
+        <div class="row" style="gap:9px"><span class="chip chip-lg">${esc(sectionCode(s))}</span><span class="nm">${esc(sectionName(s))}</span></div>
+        <div class="ln mono" style="font-size:12px">${esc(countLabel(n, "task_one", "task_many"))} · ${esc(countLabel(notes, "note_one", "note_many"))}</div>
         <div class="bar"><i style="width:${Math.min(100, n * 14 + 8)}%"></i></div>
-        <div class="ln">${soon ? `Next: ${esc(soon.title)} (${human(soon.due_date)})` : "No open tasks"}</div>
+        <div class="ln">${soon ? esc(t("next_is", { title: soon.title, when: human(soon.due_date) })) : esc(t("no_open_tasks"))}</div>
       </button>`;
     }).join("")}</div>`;
 }
 
 function quickAddHTML(sectionId) {
   return `<div class="qa" style="margin-bottom:8px">
-    <input type="text" id="qa-title" placeholder="${sectionId ? `New task in ${esc(secById(sectionId).name)}…` : "Add a task and press Enter…"}">
+    <input type="text" id="qa-title" placeholder="${esc(sectionId ? t("add_task_in", { section: sectionName(secById(sectionId)) }) : t("add_task_placeholder"))}">
     ${sectionId ? `<input type="hidden" id="qa-sec" value="${sectionId}">` : `<select id="qa-sec">${sectionOptions()}</select>`}
     <input type="date" id="qa-date" value="${off(0)}">
-    <select id="qa-rec"><option value="">one-off</option>${Object.keys(REC).map((k) => `<option value="${k}">${REC[k]}</option>`).join("")}</select>
+    <select id="qa-rec">${recurrenceOptions("")}</select>
     <select id="qa-who">${assigneeOptions(state.user.id)}</select>
-    <button class="btn btn-primary btn-sm" data-act="qa">Add</button>
+    <button class="btn btn-primary btn-sm" data-act="qa">${esc(t("add"))}</button>
   </div>`;
 }
 
 function viewUpcoming() {
   return `<div class="row" style="justify-content:space-between;margin-bottom:14px">${filtersHTML()}
-      <button class="btn btn-ghost btn-sm" data-act="go" data-view="calendar">Calendar view</button></div>
+      <button class="btn btn-ghost btn-sm" data-act="go" data-view="calendar">${esc(t("calendar_view"))}</button></div>
     ${quickAddHTML(null)}${groupsHTML(openTasks())}`;
 }
 
@@ -545,54 +714,56 @@ function viewCalendar() {
   const m = state.calMonth, y = m.getFullYear(), mo = m.getMonth();
   const startDow = (new Date(y, mo, 1).getDay() + 6) % 7;
   const start = new Date(y, mo, 1 - startDow);
-  let cells = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => `<div class="cal-dow">${d}</div>`).join("");
+  let cells = names().dowShort.map((d) => `<div class="cal-dow">${esc(d)}</div>`).join("");
   for (let i = 0; i < 42; i++) {
     const d = new Date(start); d.setDate(start.getDate() + i);
     const key = iso(d), isOut = d.getMonth() !== mo, isToday = key === off(0);
-    const evs = state.tasks.filter((t) => t.due_date === key && !t.done && whoOk(t));
+    const evs = state.tasks.filter((x) => x.due_date === key && !x.done && whoOk(x));
     cells += `<div class="cal-day${isOut ? " out" : ""}${isToday ? " today" : ""}"><div class="cal-num">${d.getDate()}</div>
-      ${evs.slice(0, 3).map((t) => `<div class="cal-ev${diff(t.due_date) < 0 ? " od" : ""}" style="--h:${secById(t.section_id).hue}" title="${esc(t.title)}">${esc(t.title)}</div>`).join("")}
-      ${evs.length > 3 ? `<div class="cal-more">+${evs.length - 3} more</div>` : ""}</div>`;
+      ${evs.slice(0, 3).map((x) => `<button class="cal-ev${diff(x.due_date) < 0 ? " od" : ""}" style="--h:${secById(x.section_id).hue}" data-act="edit-task" data-id="${x.id}" title="${esc(x.title)}">${esc(x.title)}</button>`).join("")}
+      ${evs.length > 3 ? `<div class="cal-more">${esc(t("cal_more", { n: evs.length - 3 }))}</div>` : ""}</div>`;
   }
   return `<div class="row" style="justify-content:space-between;margin-bottom:14px">
       <div class="row"><button class="btn btn-ghost btn-sm" data-act="cal" data-d="-1">‹</button>
-      <h2 style="font-size:18px;min-width:186px;text-align:center">${MONL[mo]} ${y}</h2>
+      <h2 style="font-size:18px;min-width:186px;text-align:center">${esc(names().monthLong[mo])} ${y}</h2>
       <button class="btn btn-ghost btn-sm" data-act="cal" data-d="1">›</button>
-      <button class="btn btn-ghost btn-sm" data-act="cal" data-d="0">Today</button></div>
+      <button class="btn btn-ghost btn-sm" data-act="cal" data-d="0">${esc(t("today_btn"))}</button></div>
       ${filtersHTML()}</div>
     <div class="cal">${cells}</div>
-    <p class="hint" style="margin-top:10px">The colour bar on each task is its section. A red outline means the date has passed.</p>`;
+    <p class="hint" style="margin-top:10px">${esc(t("cal_legend"))}</p>`;
 }
 
 function viewHabits() {
   const days = habitDays();
   const visible = state.habits.filter((h) => whoOk(h));
+  const first = parseDate(days[0]);
   return `<div class="row" style="justify-content:space-between;margin-bottom:14px">
-      <p class="hint" style="margin:0;max-width:60ch">Last 14 days. Click a cell to tick a day off — earlier days included. Every habit belongs to a section, so it shows up there too.</p>
+      <p class="hint" style="margin:0;max-width:60ch">${esc(t("habits_intro"))}</p>
       ${filtersHTML()}</div>
-    <div class="card"><div class="card-head"><h2>Habits</h2><div class="spacer"></div>
-      <span class="hint mono" style="font-size:11px">${parseDate(days[0]).getDate()} ${MON[parseDate(days[0]).getMonth()]} → today</span></div>
+    <div class="card"><div class="card-head"><h2>${esc(t("habits"))}</h2><div class="spacer"></div>
+      <span class="hint mono" style="font-size:11px">${first.getDate()} ${esc(names().monthShort[first.getMonth()])} → ${esc(t("today"))}</span></div>
       <div>${visible.length ? visible.map((h) => `
         <div class="hab" style="--h:${secById(h.section_id).hue}">
-          <div class="hab-name"><div class="n">${esc(h.name)}</div><div class="s">${esc(secById(h.section_id).name)} · ${esc(h.target)}</div></div>
+          <div class="hab-name"><div class="n">${esc(h.name)}</div>
+          <div class="s"><button class="sec-link" data-act="go" data-view="section" data-sec="${h.section_id}">${esc(sectionName(secById(h.section_id)))}</button> · ${esc(habitTarget(h))}</div></div>
           ${whoBadge(h.assignee_id)}
           <div class="hgrid">${days.map((d) =>
             `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}" title="${d}"></button>`).join("")}</div>
-          <div class="streak">${streak(h)}-day streak</div>
-        </div>`).join("") : `<div class="empty" style="margin:14px">No habits yet — add the first one below.</div>`}
+          <div class="streak">${esc(t("habit_streak", { n: streak(h) }))}</div>
+        </div>`).join("") : `<div class="empty" style="margin:14px">${esc(t("no_habits_add_first"))}</div>`}
       </div></div>
     <div class="qa" style="margin-top:12px">
-      <input type="text" id="hb-name" placeholder="New habit, e.g. “Read 20 pages”">
+      <input type="text" id="hb-name" placeholder="${esc(t("new_habit_placeholder"))}">
       <select id="hb-sec">${sectionOptions()}</select>
       <select id="hb-who">${assigneeOptions(state.user.id)}</select>
-      <button class="btn btn-primary btn-sm" data-act="add-habit">Add habit</button>
+      <button class="btn btn-primary btn-sm" data-act="add-habit">${esc(t("add_habit"))}</button>
     </div>`;
 }
 
 function viewSection(id) {
   const s = secById(id);
-  const tasks = state.tasks.filter((t) => t.section_id === id && !t.done && whoOk(t));
-  const doneN = state.tasks.filter((t) => t.section_id === id && t.done).length;
+  const tasks = state.tasks.filter((x) => x.section_id === id && !x.done && whoOk(x));
+  const doneN = state.tasks.filter((x) => x.section_id === id && x.done).length;
   const notes = state.notes.filter((n) => n.section_id === id);
   const habs = state.habits.filter((h) => h.section_id === id);
   let body = "";
@@ -600,51 +771,49 @@ function viewSection(id) {
     body = quickAddHTML(id) + groupsHTML(tasks);
   } else if (state.tab === "notes") {
     body = `<div class="qa" style="margin-bottom:12px">
-        <input type="text" id="nt-title" placeholder="Note title">
-        <input type="text" id="nt-body" placeholder="Note text" style="flex:2 1 260px;border:none;background:none">
-        <button class="btn btn-primary btn-sm" data-act="add-note" data-sec="${id}">Add note</button></div>` +
+        <input type="text" id="nt-title" placeholder="${esc(t("note_title"))}">
+        <input type="text" id="nt-body" placeholder="${esc(t("note_text"))}" style="flex:2 1 260px;border:none;background:none">
+        <button class="btn btn-primary btn-sm" data-act="add-note" data-sec="${id}">${esc(t("add_note"))}</button></div>` +
       (notes.length ? `<div class="notes">${notes.map((n) => `
         <article class="note" style="--h:${s.hue}"><h4>${esc(n.title)}</h4><p>${esc(n.body)}</p>
           <div class="note-foot">${whoBadge(n.created_by)}<span>${human(String(n.created_at).slice(0, 10))}</span>
-          <div class="spacer"></div><button class="del" style="opacity:1" data-act="del-note" data-id="${n.id}" aria-label="Delete note">×</button></div>
-        </article>`).join("")}</div>` : `<div class="empty">No notes in this section yet.</div>`);
+          <div class="spacer"></div><button class="del" style="opacity:1" data-act="del-note" data-id="${n.id}" aria-label="${esc(t("delete"))}">×</button></div>
+        </article>`).join("")}</div>` : `<div class="empty">${esc(t("no_notes"))}</div>`);
   } else {
-    body = `<div class="card"><div class="card-head"><h2>Habits in this section</h2></div><div>
+    body = `<div class="card"><div class="card-head"><h2>${esc(t("habits_in_section"))}</h2></div><div>
       ${habs.length ? habs.map((h) => `
-        <div class="hab" style="--h:${s.hue}"><div class="hab-name"><div class="n">${esc(h.name)}</div><div class="s">${esc(h.target)}</div></div>
+        <div class="hab" style="--h:${s.hue}"><div class="hab-name"><div class="n">${esc(h.name)}</div><div class="s">${esc(habitTarget(h))}</div></div>
         <div class="hgrid">${habitDays().map((d) => `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}"></button>`).join("")}</div></div>`).join("")
-        : `<div class="empty" style="margin:14px">No habits assigned to this section.</div>`}
+        : `<div class="empty" style="margin:14px">${esc(t("no_habits_here"))}</div>`}
       </div></div>
-      <div class="card" style="margin-top:12px"><div class="card-head"><h2>History</h2></div>
-      <div class="card-body"><p style="margin:0;color:var(--ink-2)">Tasks closed in this section: <strong class="tnum">${doneN}</strong>.
-      Repeating tasks are never closed — ticking one moves it to its next date.</p></div></div>`;
+      <div class="card" style="margin-top:12px"><div class="card-head"><h2>${esc(t("history"))}</h2></div>
+      <div class="card-body"><p style="margin:0;color:var(--ink-2)">${esc(t("closed_in_section", { n: doneN }))}</p></div></div>`;
   }
-  return `<div class="sec-head" style="--h:${s.hue}"><span class="chip chip-lg">${esc(s.code)}</span>
-      <div><h1>${esc(s.name)}</h1><p>${esc(s.description)}</p></div></div>
+  return `<div class="sec-head" style="--h:${s.hue}"><span class="chip chip-lg">${esc(sectionCode(s))}</span>
+      <div><h1>${esc(sectionName(s))}</h1><p>${esc(sectionDesc(s))}</p></div></div>
     <div class="row" style="justify-content:space-between"><div class="tabs">
-      ${[["tasks", `Tasks (${tasks.length})`], ["notes", `Notes (${notes.length})`], ["more", "Habits & history"]]
-        .map(([k, label]) => `<button class="tab${state.tab === k ? " on" : ""}" data-act="tab" data-tab="${k}">${label}</button>`).join("")}
+      ${[["tasks", t("tasks_n", { n: tasks.length })], ["notes", t("notes_n", { n: notes.length })], ["more", t("habits_history")]]
+        .map(([k, label]) => `<button class="tab${state.tab === k ? " on" : ""}" data-act="tab" data-tab="${k}">${esc(label)}</button>`).join("")}
       </div>${filtersHTML()}</div>${body}`;
 }
 
 /* ------------------------------------------------------------- app shell */
 
-const MAIN = [
-  { k: "overview", n: "Overview", code: "OV", h: 163 },
-  { k: "upcoming", n: "Upcoming", code: "UP", h: 38 },
-  { k: "calendar", n: "Calendar", code: "CA", h: 210 },
-  { k: "habits", n: "Habits", code: "HA", h: 295 }
-];
-
 function renderApp() {
   if (!state.board) return;
+  const MAIN = [
+    { k: "overview", n: t("overview"), code: "OV", h: 163 },
+    { k: "upcoming", n: t("upcoming"), code: "UP", h: 38 },
+    { k: "calendar", n: t("calendar"), code: "CA", h: 210 },
+    { k: "habits", n: t("habits"), code: "HA", h: 295 }
+  ];
   const counts = { overview: "", upcoming: openTasks().length, calendar: "", habits: state.habits.length };
-  let title = "Overview", content = "";
+  let title = t("overview"), content = "";
   if (state.view.type === "overview") content = viewOverview();
-  else if (state.view.type === "upcoming") { title = "Upcoming"; content = viewUpcoming(); }
-  else if (state.view.type === "calendar") { title = "Calendar"; content = viewCalendar(); }
-  else if (state.view.type === "habits") { title = "Habits"; content = viewHabits(); }
-  else { title = secById(state.view.sec).name; content = viewSection(state.view.sec); }
+  else if (state.view.type === "upcoming") { title = t("upcoming"); content = viewUpcoming(); }
+  else if (state.view.type === "calendar") { title = t("calendar"); content = viewCalendar(); }
+  else if (state.view.type === "habits") { title = t("habits"); content = viewHabits(); }
+  else { title = sectionName(secById(state.view.sec)); content = viewSection(state.view.sec); }
 
   root.className = "shell";
   root.innerHTML = `
@@ -656,22 +825,23 @@ function renderApp() {
       </div>
       <div class="nav-group">${MAIN.map((m) => `
         <button class="nav-item${state.view.type === m.k ? " active" : ""}" style="--h:${m.h}" data-act="go" data-view="${m.k}">
-          <span class="chip">${m.code}</span>${m.n}<span class="nav-count">${counts[m.k]}</span></button>`).join("")}
+          <span class="chip">${m.code}</span>${esc(m.n)}<span class="nav-count">${counts[m.k]}</span></button>`).join("")}
       </div>
       <div class="nav-group">
-        <div class="nav-title">Life sections</div>
+        <div class="nav-title">${esc(t("life_sections"))}</div>
         ${state.sections.map((s) => {
-          const n = state.tasks.filter((t) => t.section_id === s.id && !t.done).length;
+          const n = state.tasks.filter((x) => x.section_id === s.id && !x.done).length;
           return `<button class="nav-item${state.view.type === "section" && state.view.sec === s.id ? " active" : ""}" style="--h:${s.hue}" data-act="go" data-view="section" data-sec="${s.id}">
-            <span class="chip">${esc(s.code)}</span>${esc(s.name)}<span class="nav-count">${n || ""}</span></button>`;
+            <span class="chip">${esc(sectionCode(s))}</span>${esc(sectionName(s))}<span class="nav-count">${n || ""}</span></button>`;
         }).join("")}
-        <button class="nav-item" style="--h:163" data-act="new-section"><span class="chip">+</span>New section</button>
+        <button class="nav-item" style="--h:163" data-act="new-section"><span class="chip">+</span>${esc(t("new_section"))}</button>
       </div>
       <div class="nav-group" style="margin-top:auto">
-        <div class="sync${state.live ? "" : " off"}" style="padding:6px 10px"><span class="led"></span><span>${state.live ? " live" : " offline"}</span></div>
-        <button class="nav-item" data-act="share"><span class="chip" style="--h:163">SH</span>Sharing</button>
-        <button class="nav-item" data-act="switch-board"><span class="chip" style="--h:262">BD</span>Switch board</button>
-        <button class="nav-item" data-act="sign-out"><span class="chip" style="--h:20">SO</span>Sign out</button>
+        <div class="sync${state.live ? "" : " off"}" style="padding:6px 10px"><span class="led"></span><span>${esc(state.live ? t("live") : t("offline"))}</span></div>
+        <button class="nav-item" data-act="share"><span class="chip" style="--h:163">SH</span>${esc(t("sharing"))}</button>
+        <button class="nav-item" data-act="switch-board"><span class="chip" style="--h:262">BD</span>${esc(t("switch_board"))}</button>
+        <button class="nav-item" data-act="settings"><span class="chip" style="--h:196">ST</span>${esc(t("settings"))}</button>
+        <button class="nav-item" data-act="sign-out"><span class="chip" style="--h:20">SO</span>${esc(t("sign_out"))}</button>
       </div>
     </aside>
     <div class="main">
@@ -681,8 +851,7 @@ function renderApp() {
         <div class="members" title="${esc(state.members.map((m) => m.display_name).join(" · "))}">
           ${state.members.map((m) => `<div class="avatar" style="background:hsl(${m.hue} 42% 35%);color:#fff">${esc(initials(m.display_name))}</div>`).join("")}
         </div>
-        <button class="btn btn-ghost btn-sm" data-act="theme">Theme</button>
-        <button class="btn btn-primary btn-sm" data-act="new-task">+ New task</button>
+        <button class="btn btn-primary btn-sm" data-act="new-task">${esc(t("new_task"))}</button>
       </header>
       <div class="content">${content}</div>
     </div>`;
@@ -692,24 +861,63 @@ function renderApp() {
 
 const closeModal = () => { $("modal-root").innerHTML = ""; };
 
+function taskFormHTML(task) {
+  const rec = task?.recurrence || "";
+  return `
+    <div class="field"><label for="m-title">${esc(t("what_needs_doing"))}</label>
+      <input id="m-title" type="text" placeholder="${esc(t("task_placeholder"))}" value="${esc(task?.title || "")}"></div>
+    <div class="grid2">
+      <div class="field"><label for="m-sec">${esc(t("section"))}</label><select id="m-sec">${sectionOptions(task?.section_id ?? state.view.sec)}</select></div>
+      <div class="field"><label for="m-date">${esc(t("date"))}</label><input id="m-date" type="date" value="${task?.due_date || off(0)}"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label for="m-rec">${esc(t("repeat"))}</label><select id="m-rec">${recurrenceOptions(rec)}</select></div>
+      <div class="field"><label for="m-who">${esc(t("who"))}</label><select id="m-who">${assigneeOptions(task ? (task.assignee_id ?? "shared") : state.user.id)}</select></div>
+    </div>
+    <div id="m-fromdone-wrap" class="${rec ? "" : "hidden"}">
+      <label class="check">
+        <input type="checkbox" id="m-fromdone"${task?.recur_from_completion ? " checked" : ""}> ${esc(t("from_completion"))}</label>
+      <p class="hint" style="margin:4px 0 0">${esc(t("from_completion_hint"))}</p>
+    </div>
+    <label class="check"><input type="checkbox" id="m-pri"${task?.important ? " checked" : ""}> ${esc(t("mark_important"))}</label>`;
+}
+
+function readTaskForm() {
+  const who = $("m-who").value;
+  return {
+    title: $("m-title").value,
+    section_id: $("m-sec").value,
+    due_date: $("m-date").value,
+    recurrence: $("m-rec").value || null,
+    recur_from_completion: $("m-rec").value ? $("m-fromdone").checked : false,
+    assignee_id: who === "shared" ? null : who,
+    important: $("m-pri").checked
+  };
+}
+
 function newTaskModal() {
   $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
-    <div class="modal-head"><h2>New task</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
-    <div class="modal-body">
-      <div class="field"><label for="m-title">What needs doing</label><input id="m-title" type="text" placeholder="e.g. Book the car inspection"></div>
-      <div class="grid2">
-        <div class="field"><label for="m-sec">Section</label><select id="m-sec">${sectionOptions(state.view.sec)}</select></div>
-        <div class="field"><label for="m-date">Date</label><input id="m-date" type="date" value="${off(0)}"></div>
-      </div>
-      <div class="grid2">
-        <div class="field"><label for="m-rec">Repeat</label><select id="m-rec"><option value="">one-off</option>${Object.keys(REC).map((k) => `<option value="${k}">${REC[k]}</option>`).join("")}</select></div>
-        <div class="field"><label for="m-who">Who</label><select id="m-who">${assigneeOptions(state.user.id)}</select></div>
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-family:inherit;font-size:14px;color:var(--ink)">
-        <input type="checkbox" id="m-pri" style="width:auto"> Mark as important</label>
+    <div class="modal-head"><h2>${esc(t("new_task"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body">${taskFormHTML(null)}</div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
+    <button class="btn btn-primary" data-act="save-task">${esc(t("add"))}</button></div>
+  </div></div>`));
+  $("m-title").focus();
+}
+
+function editTaskModal(id) {
+  const task = taskById(id);
+  if (!task) return;
+  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>${esc(t("edit_task"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body">${taskFormHTML(task)}</div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-act="del-task-modal" data-id="${task.id}">${esc(t("delete"))}</button>
+      <button class="btn btn-ghost" data-act="go-section" data-sec="${task.section_id}">${esc(t("open_section"))}</button>
+      <div class="spacer"></div>
+      <button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
+      <button class="btn btn-primary" data-act="update-task" data-id="${task.id}">${esc(t("save_changes"))}</button>
     </div>
-    <div class="modal-foot"><button class="btn btn-ghost" data-act="close">Cancel</button>
-    <button class="btn btn-primary" data-act="save-task">Add task</button></div>
   </div></div>`));
   $("m-title").focus();
 }
@@ -717,36 +925,72 @@ function newTaskModal() {
 function shareModal() {
   const owner = me()?.role === "owner";
   $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
-    <div class="modal-head"><h2>Share this board</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-head"><h2>${esc(t("share_title"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">
-      <div><label>Invite code</label><div class="code">${esc(state.board.invite_code)}</div>
-      <p class="hint" style="margin:8px 0 0">The other person creates their own account, picks “Join with a code” and enters this. From then on you both edit the same board and see each other's changes live.</p></div>
-      <div><label>People on this board</label>
+      <div><label>${esc(t("invite_code"))}</label><div class="code">${esc(state.board.invite_code)}</div>
+      <p class="hint" style="margin:8px 0 0">${esc(t("invite_code_hint"))}</p></div>
+      <div><label>${esc(t("people_on_board"))}</label>
         ${state.members.map((m) => `<div class="member">
           <span class="avatar" style="background:hsl(${m.hue} 42% 35%);color:#fff">${esc(initials(m.display_name))}</span>
-          <div><div class="nm">${esc(m.display_name)}${m.user_id === state.user.id ? " (you)" : ""}</div>
-          <div class="rl">${esc(m.role)}${m.email ? ` · ${esc(m.email)}` : ""}</div></div></div>`).join("")}
+          <div><div class="nm">${esc(m.display_name)}${m.user_id === state.user.id ? esc(t("you_suffix")) : ""}</div>
+          <div class="rl">${esc(m.role === "owner" ? t("role_owner") : t("role_member"))}${m.email ? ` · ${esc(m.email)}` : ""}</div></div></div>`).join("")}
       </div>
     </div>
     <div class="modal-foot">
-      ${owner ? `<button class="btn btn-ghost" data-act="rotate-code">New code</button>` : ""}
-      <button class="btn btn-ghost" data-act="close">Close</button>
-      <button class="btn btn-primary" data-act="copy-code">Copy code</button></div>
+      ${owner ? `<button class="btn btn-ghost" data-act="rotate-code">${esc(t("new_code"))}</button>` : ""}
+      <button class="btn btn-ghost" data-act="close">${esc(t("close"))}</button>
+      <button class="btn btn-primary" data-act="copy-code">${esc(t("copy_code"))}</button></div>
   </div></div>`));
 }
 
 function newSectionModal() {
   $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
-    <div class="modal-head"><h2>New section</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
-    <div class="modal-body"><div class="field"><label for="s-name">Section name</label>
-      <input id="s-name" type="text" placeholder="e.g. Garden, Wedding, Side project"></div></div>
-    <div class="modal-foot"><button class="btn btn-ghost" data-act="close">Cancel</button>
-    <button class="btn btn-primary" data-act="save-section">Add section</button></div>
+    <div class="modal-head"><h2>${esc(t("new_section"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body"><div class="field"><label for="s-name">${esc(t("section_name"))}</label>
+      <input id="s-name" type="text" placeholder="${esc(t("section_placeholder"))}"></div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
+    <button class="btn btn-primary" data-act="save-section">${esc(t("add_section"))}</button></div>
   </div></div>`));
   $("s-name").focus();
 }
 
+function settingsModal() {
+  const themes = [["system", t("theme_system")], ["light", t("theme_light")], ["dark", t("theme_dark")]];
+  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>${esc(t("settings_title"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body">
+      <div><label>${esc(t("language"))}</label>
+        <div class="filters" style="margin-top:6px">
+          ${["en", "pl"].map((l) => `<button class="fchip${lang === l ? " on" : ""}" data-act="set-lang" data-lang="${l}">${l === "en" ? "English" : "Polski"}</button>`).join("")}
+        </div>
+        <p class="hint" style="margin:6px 0 0">${esc(t("language_note"))}</p>
+      </div>
+      <div><label>${esc(t("theme"))}</label>
+        <div class="filters" style="margin-top:6px">
+          ${themes.map(([v, label]) => `<button class="fchip${theme === v ? " on" : ""}" data-act="set-theme" data-theme="${v}">${esc(label)}</button>`).join("")}
+        </div>
+      </div>
+      ${state.board ? `<div class="field"><label for="set-name">${esc(t("display_name"))}</label>
+        <input id="set-name" type="text" value="${esc(me()?.display_name || displayName())}">
+        <p class="hint" style="margin:2px 0 0">${esc(t("display_name_hint"))}</p></div>` : ""}
+      <div><label>${esc(t("password"))}</label>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-act="change-password">${esc(t("change_password"))}</button></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("close"))}</button>
+      <button class="btn btn-primary" data-act="save-settings">${esc(t("save"))}</button></div>
+  </div></div>`));
+}
+
 /* ------------------------------------------------------------- events */
+
+function rerenderAfterLangOrTheme() {
+  closeModal();
+  if (state.board) renderApp();
+  else if (state.recovery) renderNewPassword();
+  else if (state.user) renderBoardPicker();
+  else renderAuth();
+  settingsModal();
+}
 
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-act]");
@@ -754,16 +998,48 @@ document.addEventListener("click", async (e) => {
   const a = b.dataset.act;
 
   switch (a) {
+    /* auth */
     case "auth-tab": state.authTab = b.dataset.tab; return renderAuth();
     case "sign-in": return signIn();
     case "sign-up": return signUp();
+    case "send-reset": return sendReset();
+    case "save-password": return savePassword();
+    case "lang": setLang(b.dataset.lang); return renderAuth();
+    case "change-password":
+      closeModal();
+      state.recovery = true;
+      return renderNewPassword();
+    case "cancel-recovery":
+      state.recovery = false;
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      return state.user ? renderBoardPicker() : renderAuth();
     case "sign-out": {
       if (channel) { sb.removeChannel(channel); channel = null; }
       localStorage.removeItem("thelife-board");
       state.board = null;
+      closeModal();
       await sb.auth.signOut();
       return;
     }
+
+    /* settings */
+    case "settings": return settingsModal();
+    case "set-lang": setLang(b.dataset.lang); return rerenderAfterLangOrTheme();
+    case "set-theme": {
+      theme = b.dataset.theme;
+      try { localStorage.setItem("thelife-theme", theme); } catch {}
+      applyTheme(theme);
+      return rerenderAfterLangOrTheme();
+    }
+    case "save-settings": {
+      const nameInput = $("set-name");
+      if (nameInput) await saveMemberName(nameInput.value);
+      closeModal();
+      if (state.board) renderApp();
+      return toast(t("settings_saved"));
+    }
+
+    /* boards */
     case "open-board": return openBoard(b.dataset.id);
     case "create-board": return createBoard();
     case "join-board": return joinBoard();
@@ -773,9 +1049,17 @@ document.addEventListener("click", async (e) => {
       state.board = null;
       return renderBoardPicker();
     }
+
+    /* navigation */
     case "go":
       state.view = b.dataset.view === "section" ? { type: "section", sec: b.dataset.sec } : { type: b.dataset.view };
       if (b.dataset.view === "section") state.tab = "tasks";
+      window.scrollTo({ top: 0 });
+      return renderApp();
+    case "go-section":
+      closeModal();
+      state.view = { type: "section", sec: b.dataset.sec };
+      state.tab = "tasks";
       window.scrollTo({ top: 0 });
       return renderApp();
     case "who": state.who = b.dataset.who; return renderApp();
@@ -787,63 +1071,70 @@ document.addEventListener("click", async (e) => {
         : new Date(state.calMonth.getFullYear(), state.calMonth.getMonth() + d, 1);
       return renderApp();
     }
+
+    /* tasks */
     case "toggle": return toggleTask(b.dataset.id);
     case "del-task": return deleteTask(b.dataset.id);
-    case "del-note": return deleteNote(b.dataset.id);
-    case "habit": return toggleHabitDay(b.dataset.id, b.dataset.day);
+    case "del-task-modal": closeModal(); return deleteTask(b.dataset.id);
+    case "edit-task": return editTaskModal(b.dataset.id);
+    case "new-task": return newTaskModal();
+    case "save-task": {
+      const draft = readTaskForm();
+      if (!draft.title.trim()) return toast(t("err_need_title"));
+      closeModal();
+      return addTask(draft);
+    }
+    case "update-task": {
+      const draft = readTaskForm();
+      if (!draft.title.trim()) return toast(t("err_need_title"));
+      closeModal();
+      return updateTask(b.dataset.id, draft, t("task_updated"));
+    }
     case "qa": {
       const who = $("qa-who").value;
       return addTask({
         title: $("qa-title").value, section_id: $("qa-sec").value, due_date: $("qa-date").value,
-        recurrence: $("qa-rec").value, assignee_id: who === "shared" ? null : who, important: false
+        recurrence: $("qa-rec").value || null, recur_from_completion: false,
+        assignee_id: who === "shared" ? null : who, important: false
       });
     }
+
+    /* notes, habits, sections */
     case "add-note": return addNote(b.dataset.sec);
+    case "del-note": return deleteNote(b.dataset.id);
     case "add-habit": return addHabit();
-    case "new-task": return newTaskModal();
+    case "habit": return toggleHabitDay(b.dataset.id, b.dataset.day);
     case "new-section": return newSectionModal();
     case "save-section": {
       const name = $("s-name").value.trim();
-      if (!name) return toast("Give the section a name.");
+      if (!name) return toast(t("err_section_name"));
       closeModal();
       return addSection(name);
     }
-    case "save-task": {
-      const who = $("m-who").value;
-      const draft = {
-        title: $("m-title").value,
-        section_id: $("m-sec").value,
-        due_date: $("m-date").value,
-        recurrence: $("m-rec").value,
-        assignee_id: who === "shared" ? null : who,
-        important: $("m-pri").checked
-      };
-      if (!draft.title.trim()) return toast("Type what needs doing first.");
-      closeModal();
-      return addTask(draft);
-    }
+
+    /* sharing */
     case "share": return shareModal();
     case "copy-code":
-      try { await navigator.clipboard.writeText(state.board.invite_code); toast("Invite code copied."); }
-      catch { toast(`Invite code: ${state.board.invite_code}`); }
+      try { await navigator.clipboard.writeText(state.board.invite_code); toast(t("code_copied")); }
+      catch { toast(state.board.invite_code); }
       return;
     case "rotate-code": {
       const { data, error } = await sb.rpc("rotate_invite_code", { p_board: state.board.id });
       if (error) return toast(error.message);
       state.board.invite_code = data;
       closeModal(); renderApp(); shareModal();
-      return toast("New invite code generated.");
+      return toast(t("code_rotated"));
     }
+
     case "close": return closeModal();
-    case "theme": {
-      const cur = document.documentElement.getAttribute("data-theme");
-      const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const next = cur ? (cur === "dark" ? "light" : "dark") : (dark ? "light" : "dark");
-      document.documentElement.setAttribute("data-theme", next);
-      try { localStorage.setItem("thelife-theme", next); } catch {}
-      return;
-    }
   }
+});
+
+/* show or hide the "count from completion" option with the repeat select */
+document.addEventListener("change", (e) => {
+  if (e.target.id !== "m-rec") return;
+  const wrap = $("m-fromdone-wrap");
+  if (wrap) wrap.classList.toggle("hidden", !e.target.value);
 });
 
 document.addEventListener("keydown", (e) => {
@@ -852,13 +1143,20 @@ document.addEventListener("keydown", (e) => {
   const id = e.target.id;
   const click = (sel) => document.querySelector(sel)?.click();
   if (id === "qa-title") click('[data-act="qa"]');
-  else if (id === "m-title") click('[data-act="save-task"]');
+  else if (id === "m-title") {
+    const save = document.querySelector('[data-act="update-task"]') || document.querySelector('[data-act="save-task"]');
+    save?.click();
+  }
   else if (id === "s-name") click('[data-act="save-section"]');
   else if (id === "nt-title" || id === "nt-body") click('[data-act="add-note"]');
   else if (id === "hb-name") click('[data-act="add-habit"]');
   else if (id === "new-board") click('[data-act="create-board"]');
   else if (id === "join-code") click('[data-act="join-board"]');
-  else if (id === "a-email" || id === "a-pass" || id === "a-name") click(`[data-act="${state.authTab === "up" ? "sign-up" : "sign-in"}"]`);
+  else if (id === "np-1" || id === "np-2") click('[data-act="save-password"]');
+  else if (id === "a-email" || id === "a-pass" || id === "a-name") {
+    const act = state.authTab === "up" ? "sign-up" : state.authTab === "reset" ? "send-reset" : "sign-in";
+    click(`[data-act="${act}"]`);
+  }
 });
 
 document.addEventListener("mousedown", (e) => {
@@ -867,21 +1165,28 @@ document.addEventListener("mousedown", (e) => {
 
 /* ------------------------------------------------------------- boot */
 
-try {
-  const t = localStorage.getItem("thelife-theme");
-  if (t) document.documentElement.setAttribute("data-theme", t);
-} catch {}
+// Arriving from the "reset password" email.
+{
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const query = new URLSearchParams(window.location.search);
+  if (hash.get("type") === "recovery" || query.get("type") === "recovery") state.recovery = true;
+}
 
 sb.auth.onAuthStateChange(async (event, session) => {
   const user = session?.user || null;
   const changed = user?.id !== state.user?.id;
   state.user = user;
+  if (event === "PASSWORD_RECOVERY" || state.recovery) {
+    state.recovery = true;
+    if (!$("np-1")) renderNewPassword();
+    return;
+  }
   if (!user) { state.board = null; return renderAuth(); }
   if (!changed && state.board) return;
   const last = localStorage.getItem("thelife-board");
   if (last) {
     const boards = await loadBoards();
-    if (boards.some((b) => b.id === last)) return openBoard(last);
+    if (boards.some((x) => x.id === last)) return openBoard(last);
   }
   renderBoardPicker();
 });

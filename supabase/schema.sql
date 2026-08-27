@@ -87,6 +87,11 @@ create table if not exists public.habit_days (
   primary key (habit_id, day)
 );
 
+-- Added later: when true, ticking a repeating task off starts the next period
+-- from that moment instead of keeping the fixed schedule.
+alter table public.tasks
+  add column if not exists recur_from_completion boolean not null default false;
+
 create index if not exists tasks_board_due_idx  on public.tasks (board_id, done, due_date);
 create index if not exists notes_board_idx      on public.notes (board_id, section_id);
 create index if not exists habits_board_idx     on public.habits (board_id);
