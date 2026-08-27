@@ -9,6 +9,6 @@
 // and write exactly the boards they are a member of.
 
 window.THE_LIFE_CONFIG = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: ""
+  SUPABASE_URL: "https://crsmuawtgnqiwxveyiuv.supabase.co/rest/v1/",
+  SUPABASE_ANON_KEY: "sb_publishable_pFWMUB2XbVfAYc7Qp2YcKA_U4mIAXrx"
 };
