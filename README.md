@@ -31,8 +31,8 @@ contents of [`supabase/schema.sql`](supabase/schema.sql) and press **Run**. It c
 tables, the access rules and the `create_board` / `join_board` functions.
 
 The file is written to be run again at any time: when a change here adds a column, re-running
-it is the whole migration. (Run it again now if your project was set up before the
-`recur_from_completion` column arrived.)
+it is the whole migration. (Run it again if your project predates the `recur_from_completion`
+column on `tasks` or `avatar_url` on `profiles`.)
 
 **3. Turn off email confirmation** (optional, but easier for two people).
 **Authentication → Sign In / Providers → Email** → switch **Confirm email** off. With it on,
@@ -70,10 +70,11 @@ GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow
 | Overview | Overdue / due today / this week / habits, what's next, and the section grid |
 | Upcoming | Every task on one timeline: Overdue → Today → Tomorrow → This week → Next week → Later |
 | Calendar | Month view; the colour bar is the section, a red outline means the date has passed |
-| Habits | 14-day grid, click any day (past days included), streaks, habits belong to sections |
+| Habits | 14-day grid, click any day (past days included), streaks; a habit ticked off today lights up in its section colour. Click a habit's name to rename it, move it, change how often or delete it |
 | Section | Tasks, notes, habits and history for that part of life |
+| Account | One button at the bottom of the sidebar: your picture and name, then settings, sharing, switching boards and signing out |
 | Sharing | Invite code (the owner can roll it), who is on the board, and their roles |
-| Settings | Interface language (English / Polski), theme, your name on the board, password |
+| Settings | Profile picture, your colour, interface language (English / Polski), theme, your name on the board, password |
 
 ### Life sections
 
@@ -100,6 +101,15 @@ Each repeating task also carries a switch, **off by default**:
 Click a task's title — anywhere it appears, the calendar included — to edit it: title,
 section, date, repeat rule, who it belongs to, whether it's important. Clicking the section
 name on a task jumps straight to that section.
+
+### Small things that matter
+
+Ticking a task off plays a short farewell — the row flashes, the tick draws itself and the
+row slides away — so you see what happened without reading a message. A repeating task
+slides sideways instead, because it is coming back. Habits ticked off today are tinted in
+their section's colour, and the connection state is silent unless it breaks: an amber
+**Offline** chip appears in the top bar and everything keeps working locally until it
+reconnects. All of it respects the system "reduce motion" setting.
 
 ### Language
 

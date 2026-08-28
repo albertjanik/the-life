@@ -195,6 +195,29 @@ window.THE_LIFE_I18N = {
     code_rotated: "New invite code generated.",
     close: "Close",
 
+    /* account */
+    account: "Account",
+    profile_photo: "Profile picture",
+    upload_photo: "Upload a photo",
+    remove_photo: "Remove",
+    photo_hint: "Kept small (128 px) and shown next to everything you add.",
+    your_colour: "Your colour",
+    colour_hint: "Used for your initials and the tasks assigned to you.",
+    board_menu: "Board",
+    offline_note: "Offline — changes will sync when the connection is back",
+    err_photo_type: "Pick an image file.",
+    photo_saved: "Profile picture updated.",
+    photo_removed: "Profile picture removed.",
+
+    /* habit editing */
+    edit_habit: "Edit habit",
+    habit_name: "Habit",
+    frequency: "How often",
+    frequency_placeholder: "e.g. every day, 3× a week",
+    habit_updated: "Habit updated.",
+    habit_deleted: "Habit deleted.",
+    delete_habit: "Delete habit",
+
     /* settings */
     settings_title: "Account settings",
     language: "Language",
@@ -400,6 +423,29 @@ window.THE_LIFE_I18N = {
     code_copied: "Kod skopiowany.",
     code_rotated: "Wygenerowano nowy kod.",
     close: "Zamknij",
+
+    /* account */
+    account: "Konto",
+    profile_photo: "Zdjęcie profilowe",
+    upload_photo: "Wgraj zdjęcie",
+    remove_photo: "Usuń",
+    photo_hint: "Trzymane w małym rozmiarze (128 px), widoczne przy wszystkim, co dodajesz.",
+    your_colour: "Twój kolor",
+    colour_hint: "Używany do Twoich inicjałów i zadań przypisanych do Ciebie.",
+    board_menu: "Tablica",
+    offline_note: "Offline — zmiany zsynchronizują się po powrocie połączenia",
+    err_photo_type: "Wybierz plik z obrazem.",
+    photo_saved: "Zdjęcie profilowe zmienione.",
+    photo_removed: "Zdjęcie profilowe usunięte.",
+
+    /* habit editing */
+    edit_habit: "Edytuj nawyk",
+    habit_name: "Nawyk",
+    frequency: "Jak często",
+    frequency_placeholder: "np. codziennie, 3× w tygodniu",
+    habit_updated: "Nawyk zaktualizowany.",
+    habit_deleted: "Nawyk usunięty.",
+    delete_habit: "Usuń nawyk",
 
     settings_title: "Ustawienia konta",
     language: "Język",

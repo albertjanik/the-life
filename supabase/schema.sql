@@ -92,6 +92,11 @@ create table if not exists public.habit_days (
 alter table public.tasks
   add column if not exists recur_from_completion boolean not null default false;
 
+-- Added later: a small profile picture, stored inline as a data URL
+-- (resized to 128x128 in the browser before it is saved).
+alter table public.profiles
+  add column if not exists avatar_url text;
+
 create index if not exists tasks_board_due_idx  on public.tasks (board_id, done, due_date);
 create index if not exists notes_board_idx      on public.notes (board_id, section_id);
 create index if not exists habits_board_idx     on public.habits (board_id);

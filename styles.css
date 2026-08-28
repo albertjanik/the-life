@@ -414,3 +414,117 @@ label.check{
 label.check input{width:auto}
 .modal-foot{flex-wrap:wrap}
 .modal-foot .btn{white-space:nowrap}
+
+/* ================= motion ================= */
+:root{ --ease:cubic-bezier(.2,.7,.3,1); }
+
+@keyframes fadeUp{ from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+@keyframes popIn{ 0%{opacity:0;transform:scale(.94)} 100%{opacity:1;transform:none} }
+@keyframes overlayIn{ from{opacity:0} to{opacity:1} }
+@keyframes cellPop{ 0%{transform:scale(.55)} 60%{transform:scale(1.18)} 100%{transform:scale(1)} }
+@keyframes drawTick{ from{stroke-dashoffset:16} to{stroke-dashoffset:0} }
+@keyframes rowLeave{
+  0%   {opacity:1;transform:none;max-height:var(--row-h,80px)}
+  35%  {opacity:1;transform:scale(.985);background:var(--accent-soft);border-color:var(--accent)}
+  100% {opacity:0;transform:translateX(26px) scale(.97);max-height:0;margin-top:-6px;padding-top:0;padding-bottom:0;border-width:0}
+}
+@keyframes rowShift{
+  0%   {opacity:1;transform:none}
+  30%  {background:var(--accent-soft);border-color:var(--accent)}
+  100% {opacity:0;transform:translateX(34px)}
+}
+@keyframes ledPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+
+.content{ animation:fadeUp .2s var(--ease) both }
+.overlay{ animation:overlayIn .16s ease both }
+.modal{ animation:popIn .2s var(--ease) both }
+.stat,.sec-card,.card{ transition:transform .16s var(--ease), border-color .16s, box-shadow .16s }
+.stat:hover,.sec-card:hover{ transform:translateY(-2px) }
+.task{ transition:border-color .12s, background .2s, transform .16s var(--ease), opacity .2s }
+.task:hover{ transform:translateX(1px) }
+.task.leaving{ overflow:hidden; animation:rowLeave .46s var(--ease) forwards; pointer-events:none }
+.task.shifting{ animation:rowShift .38s var(--ease) forwards; pointer-events:none }
+.task.leaving .tick,.task.shifting .tick{ background:var(--accent);border-color:var(--accent) }
+.task.leaving .tick svg,.task.shifting .tick svg{
+  opacity:1;stroke:var(--on-accent);stroke-dasharray:16;animation:drawTick .28s var(--ease) forwards;
+}
+.tick{ transition:background .18s var(--ease), border-color .18s, transform .18s var(--ease) }
+.tick:hover{ transform:scale(1.12) }
+.hcell{ transition:background .18s var(--ease), border-color .18s, transform .14s var(--ease) }
+.hcell:hover{ transform:scale(1.14) }
+.hcell.pop{ animation:cellPop .34s var(--ease) }
+.nav-item,.fchip,.btn,.tab{ transition:background .14s, color .14s, border-color .14s, transform .14s var(--ease) }
+.btn:active,.fchip:active,.nav-item:active{ transform:scale(.97) }
+.note{ transition:transform .16s var(--ease), border-color .16s }
+.note:hover{ transform:translateY(-2px) }
+
+/* a habit ticked off today reads as done at a glance */
+.hab{ transition:background .25s var(--ease), box-shadow .25s }
+.hab.done-today{
+  background:linear-gradient(90deg, var(--cat-bg) 0%, transparent 78%);
+  box-shadow:inset 3px 0 0 var(--cat-fg);
+}
+.hab.done-today .hab-name .n{ color:var(--cat-fg) }
+.hab-open{ font-weight:600;text-align:left;color:inherit;border-radius:5px }
+.hab-open:hover{ text-decoration:underline;text-underline-offset:2px }
+
+/* ================= avatars with photos ================= */
+.avatar.has-photo,.who.has-photo{ background:none;overflow:hidden;padding:0 }
+.avatar img,.who img{ width:100%;height:100%;object-fit:cover;display:block;border-radius:50% }
+.avatar.av-lg{ width:34px;height:34px;font-size:13px;margin-left:0;border-width:0 }
+.avatar.av-xl{ width:62px;height:62px;font-size:22px;margin-left:0;border-width:0 }
+.who-shared{ color:#fff }
+.swatches{ display:flex;gap:8px;flex-wrap:wrap;margin-top:6px }
+.swatch{
+  width:26px;height:26px;border-radius:50%;border:2px solid transparent;
+  box-shadow:0 0 0 1px var(--line);transition:transform .14s var(--ease), border-color .14s;
+}
+.swatch:hover{ transform:scale(1.12) }
+.swatch.on{ border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) }
+
+/* ================= account button + menu ================= */
+.account{
+  display:flex;align-items:center;gap:10px;width:100%;padding:8px;border-radius:10px;
+  border:1px solid var(--line);background:var(--surface-2);text-align:left;
+  transition:border-color .14s, background .14s, transform .14s var(--ease);
+}
+.account:hover{ border-color:var(--line-2);background:var(--surface) }
+.account:active{ transform:scale(.99) }
+.account-text{ min-width:0;flex:1;display:flex;flex-direction:column;line-height:1.2 }
+.account-text .nm{ font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+.account-text .sub{
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-family:"IBM Plex Mono",monospace;
+}
+.account .chev{ color:var(--ink-3);flex:none }
+
+.popover{
+  position:fixed;z-index:70;min-width:232px;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;box-shadow:0 18px 44px -18px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.08);
+  padding:6px;animation:popIn .14s var(--ease) both;
+}
+.pop-head{ display:flex;align-items:center;gap:10px;padding:9px 10px 11px;border-bottom:1px solid var(--line);margin-bottom:6px }
+.pop-head .nm{ font-weight:600;font-size:14px }
+.pop-head .sub{ font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px }
+.pop-item{
+  display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:8px;
+  text-align:left;color:var(--ink-2);font-weight:500;transition:background .12s, color .12s;
+}
+.pop-item:hover{ background:var(--surface-2);color:var(--ink) }
+.pop-item.danger:hover{ background:var(--crit-soft);color:var(--crit) }
+.pop-ico{ width:18px;text-align:center;color:var(--ink-3);font-size:13px }
+.pop-item:hover .pop-ico{ color:inherit }
+.pop-sep{ height:1px;background:var(--line);margin:6px 4px }
+
+/* ================= connection ================= */
+.offline-chip{
+  display:inline-flex;align-items:center;gap:7px;padding:3px 10px;border-radius:999px;
+  background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn);
+  font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.04em;
+}
+.offline-chip .led{ width:7px;height:7px;border-radius:50%;background:var(--warn);animation:ledPulse 1.6s ease-in-out infinite }
+
+@media (max-width:900px){
+  .account{ width:auto;white-space:nowrap }
+  .account-text{ display:none }
+}

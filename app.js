@@ -180,6 +180,10 @@ const state = {
   recovery: false
 };
 
+/* one-shot animation markers, cleared shortly after they play */
+let fx = { pop: null };
+let fxTimer = null;
+
 const secById = (id) => state.sections.find((s) => s.id === id) || { name: "—", hue: 163, code: "??", description: "" };
 const memberById = (id) => state.members.find((m) => m.user_id === id);
 const me = () => memberById(state.user?.id);
@@ -189,6 +193,17 @@ function initials(name) {
   const parts = String(name || "?").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   return ((parts[0]?.[0] || "?") + (parts[1]?.[0] || "")).toUpperCase();
 }
+function avatarHTML(member, cls = "avatar") {
+  const hue = member?.hue ?? 163;
+  const name = member?.display_name || "";
+  if (member?.avatar_url) {
+    return `<span class="${cls} has-photo" title="${esc(name)}"><img src="${esc(member.avatar_url)}" alt=""></span>`;
+  }
+  return `<span class="${cls}" style="background:hsl(${hue} 42% 35%);color:#fff" title="${esc(name)}">${esc(initials(name))}</span>`;
+}
+
+const profileAvatar = () => me()?.avatar_url || null;
+
 const displayName = () =>
   state.user?.user_metadata?.display_name || (state.user?.email || "").split("@")[0] || "Me";
 
@@ -421,7 +436,7 @@ async function refreshAll() {
   const id = state.board.id;
   const [members, profiles, sections, tasks, notes, habits, days] = await Promise.all([
     sb.from("board_members").select("*").eq("board_id", id),
-    sb.from("profiles").select("id, email, display_name"),
+    sb.from("profiles").select("id, email, display_name, avatar_url"),
     sb.from("sections").select("*").eq("board_id", id).order("position"),
     sb.from("tasks").select("*").eq("board_id", id),
     sb.from("notes").select("*").eq("board_id", id).order("created_at", { ascending: false }),
@@ -431,7 +446,8 @@ async function refreshAll() {
   const profs = profiles.data || [];
   state.members = (members.data || []).map((m) => {
     const p = profs.find((x) => x.id === m.user_id);
-    return { ...m, display_name: m.display_name || p?.display_name || p?.email || "Member", email: p?.email || "" };
+    return { ...m, display_name: m.display_name || p?.display_name || p?.email || "Member",
+             email: p?.email || "", avatar_url: p?.avatar_url || null };
   });
   state.sections = sections.data || [];
   state.tasks = tasks.data || [];
@@ -456,9 +472,8 @@ function subscribe(boardId) {
   channel.on("postgres_changes",
     { event: "*", schema: "public", table: "boards", filter: `id=eq.${boardId}` }, scheduleRefresh);
   channel.subscribe((status) => {
-    state.live = status === "SUBSCRIBED";
-    const led = document.querySelector(".sync");
-    if (led) { led.classList.toggle("off", !state.live); led.lastElementChild.textContent = state.live ? t("live") : t("offline"); }
+    const live = status === "SUBSCRIBED";
+    if (live !== state.live) { state.live = live; renderApp(); }
   });
 }
 
@@ -495,15 +510,28 @@ async function updateTask(id, patch, okMsg) {
   await refreshAll(); renderApp();
 }
 
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+async function playRowExit(id, cls) {
+  const row = document.querySelector(`.task[data-id="${CSS.escape(id)}"]`);
+  if (!row || reducedMotion()) return;
+  row.style.setProperty("--row-h", `${row.offsetHeight}px`);
+  row.classList.add(cls);
+  await wait(cls === "leaving" ? 460 : 380);
+}
+
 async function toggleTask(id) {
   const task = taskById(id);
   if (!task) return;
   if (task.recurrence && !task.done) {
     const nd = nextDate(task);
+    await playRowExit(id, "shifting");
     task.due_date = nd; renderApp();
     await run(sb.from("tasks").update({ due_date: nd }).eq("id", id), t("next_time", { when: human(nd) }));
   } else {
     const done = !task.done;
+    if (done) await playRowExit(id, "leaving");
     task.done = done; renderApp();
     await run(sb.from("tasks").update({ done, done_at: done ? new Date().toISOString() : null }).eq("id", id),
       done ? t("task_closed") : null);
@@ -539,10 +567,14 @@ async function addHabit() {
 async function toggleHabitDay(habit_id, day) {
   const key = `${habit_id}|${day}`;
   if (state.days.has(key)) {
-    state.days.delete(key); renderApp();
+    state.days.delete(key); fx = { pop: null }; renderApp();
     await run(sb.from("habit_days").delete().eq("habit_id", habit_id).eq("day", day));
   } else {
-    state.days.add(key); renderApp();
+    state.days.add(key);
+    fx = { pop: key };
+    clearTimeout(fxTimer);
+    fxTimer = setTimeout(() => { fx = { pop: null }; }, 600);
+    renderApp();
     await run(sb.from("habit_days").insert({ habit_id, day, board_id: boardId(), user_id: state.user.id }));
   }
 }
@@ -556,6 +588,72 @@ async function addSection(name) {
     position: (state.sections.at(-1)?.position || 0) + 1
   }), t("section_added", { name }));
   await refreshAll(); renderApp();
+}
+
+async function saveMemberHue(hue) {
+  const m = me();
+  if (m) m.hue = hue;
+  renderApp();
+  await sb.from("board_members").update({ hue }).eq("board_id", boardId()).eq("user_id", state.user.id);
+  await refreshAll(); renderApp();
+}
+
+/* Resize to a 128 px square in the browser, then keep it inline on the profile. */
+function resizeToDataURL(file, size = 128) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode failed"));
+      img.onload = () => {
+        const side = Math.min(img.width, img.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadAvatar(file) {
+  if (!file) return;
+  if (!file.type.startsWith("image/")) return toast(t("err_photo_type"));
+  let dataUrl;
+  try { dataUrl = await resizeToDataURL(file); } catch { return toast(t("err_photo_type")); }
+  const { error } = await sb.from("profiles").update({ avatar_url: dataUrl }).eq("id", state.user.id);
+  if (error) return toast(error.message);
+  await refreshAll();
+  toast(t("photo_saved"));
+  closeModal(); settingsModal();
+  if (state.board) renderApp();
+}
+
+async function removeAvatar() {
+  const { error } = await sb.from("profiles").update({ avatar_url: null }).eq("id", state.user.id);
+  if (error) return toast(error.message);
+  await refreshAll();
+  toast(t("photo_removed"));
+  closeModal(); settingsModal();
+  if (state.board) renderApp();
+}
+
+async function updateHabit(id, patch, okMsg) {
+  const h = state.habits.find((x) => x.id === id);
+  if (h) Object.assign(h, patch);
+  renderApp();
+  await run(sb.from("habits").update(patch).eq("id", id), okMsg);
+  await refreshAll(); renderApp();
+}
+
+async function deleteHabit(id) {
+  state.habits = state.habits.filter((x) => x.id !== id);
+  renderApp();
+  await run(sb.from("habits").delete().eq("id", id), t("habit_deleted"));
 }
 
 async function saveMemberName(name) {
@@ -576,10 +674,12 @@ function whoOk(row) {
 const openTasks = () => state.tasks.filter((x) => !x.done && whoOk(x));
 
 function whoBadge(assignee_id) {
-  if (!assignee_id) return `<span class="who" style="background:linear-gradient(105deg,hsl(163 45% 32%) 50%,hsl(288 35% 42%) 50%);color:#fff" title="${esc(t("shared"))}">◑</span>`;
-  const m = memberById(assignee_id);
-  const hue = m?.hue ?? 163;
-  return `<span class="who" style="background:hsl(${hue} 42% 35%);color:#fff" title="${esc(m?.display_name || "")}">${esc(initials(m?.display_name))}</span>`;
+  if (!assignee_id) {
+    const [a, b] = state.members;
+    return `<span class="who who-shared" title="${esc(t("shared"))}"
+      style="background:linear-gradient(105deg,hsl(${a?.hue ?? 163} 45% 34%) 50%,hsl(${b?.hue ?? 288} 40% 42%) 50%)">◑</span>`;
+  }
+  return avatarHTML(memberById(assignee_id), "who");
 }
 
 function taskHTML(task) {
@@ -673,9 +773,11 @@ function viewOverview() {
         <div class="card-body"><div class="tlist">${next.length ? next.map(taskHTML).join("") : `<div class="empty">${esc(t("nothing_waiting"))}</div>`}</div></div></div>
       <div class="card"><div class="card-head"><h2>${esc(t("habits_today"))}</h2></div><div>
         ${state.habits.length ? state.habits.map((h) => `
-          <div class="hab" style="--h:${secById(h.section_id).hue}">
-            <div class="hab-name"><div class="n">${esc(h.name)}</div><div class="s">${esc(habitTarget(h))}</div></div>
-            <button class="hcell today${ticked(h, off(0)) ? " on" : ""}" data-act="habit" data-id="${h.id}" data-day="${off(0)}"></button>
+          <div class="hab${ticked(h, off(0)) ? " done-today" : ""}" style="--h:${secById(h.section_id).hue}">
+            <div class="hab-name">
+              <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
+              <div class="s">${esc(habitTarget(h))}</div></div>
+            <button class="hcell today${ticked(h, off(0)) ? " on" : ""}${fx.pop === h.id + "|" + off(0) ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${off(0)}"></button>
           </div>`).join("") : `<div class="empty" style="margin:14px">${esc(t("no_habits_yet"))}</div>`}
       </div></div>
     </div>
@@ -743,12 +845,13 @@ function viewHabits() {
     <div class="card"><div class="card-head"><h2>${esc(t("habits"))}</h2><div class="spacer"></div>
       <span class="hint mono" style="font-size:11px">${first.getDate()} ${esc(names().monthShort[first.getMonth()])} → ${esc(t("today"))}</span></div>
       <div>${visible.length ? visible.map((h) => `
-        <div class="hab" style="--h:${secById(h.section_id).hue}">
-          <div class="hab-name"><div class="n">${esc(h.name)}</div>
-          <div class="s"><button class="sec-link" data-act="go" data-view="section" data-sec="${h.section_id}">${esc(sectionName(secById(h.section_id)))}</button> · ${esc(habitTarget(h))}</div></div>
+        <div class="hab${ticked(h, off(0)) ? " done-today" : ""}" style="--h:${secById(h.section_id).hue}">
+          <div class="hab-name">
+            <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
+            <div class="s"><button class="sec-link" data-act="go" data-view="section" data-sec="${h.section_id}">${esc(sectionName(secById(h.section_id)))}</button> · ${esc(habitTarget(h))}</div></div>
           ${whoBadge(h.assignee_id)}
           <div class="hgrid">${days.map((d) =>
-            `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}" title="${d}"></button>`).join("")}</div>
+            `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}${fx.pop === h.id + "|" + d ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}" title="${d}"></button>`).join("")}</div>
           <div class="streak">${esc(t("habit_streak", { n: streak(h) }))}</div>
         </div>`).join("") : `<div class="empty" style="margin:14px">${esc(t("no_habits_add_first"))}</div>`}
       </div></div>
@@ -782,8 +885,10 @@ function viewSection(id) {
   } else {
     body = `<div class="card"><div class="card-head"><h2>${esc(t("habits_in_section"))}</h2></div><div>
       ${habs.length ? habs.map((h) => `
-        <div class="hab" style="--h:${s.hue}"><div class="hab-name"><div class="n">${esc(h.name)}</div><div class="s">${esc(habitTarget(h))}</div></div>
-        <div class="hgrid">${habitDays().map((d) => `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}"></button>`).join("")}</div></div>`).join("")
+        <div class="hab${ticked(h, off(0)) ? " done-today" : ""}" style="--h:${s.hue}"><div class="hab-name">
+          <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
+          <div class="s">${esc(habitTarget(h))}</div></div>
+        <div class="hgrid">${habitDays().map((d) => `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}${fx.pop === h.id + "|" + d ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}"></button>`).join("")}</div></div>`).join("")
         : `<div class="empty" style="margin:14px">${esc(t("no_habits_here"))}</div>`}
       </div></div>
       <div class="card" style="margin-top:12px"><div class="card-head"><h2>${esc(t("history"))}</h2></div>
@@ -837,19 +942,23 @@ function renderApp() {
         <button class="nav-item" style="--h:163" data-act="new-section"><span class="chip">+</span>${esc(t("new_section"))}</button>
       </div>
       <div class="nav-group" style="margin-top:auto">
-        <div class="sync${state.live ? "" : " off"}" style="padding:6px 10px"><span class="led"></span><span>${esc(state.live ? t("live") : t("offline"))}</span></div>
-        <button class="nav-item" data-act="share"><span class="chip" style="--h:163">SH</span>${esc(t("sharing"))}</button>
-        <button class="nav-item" data-act="switch-board"><span class="chip" style="--h:262">BD</span>${esc(t("switch_board"))}</button>
-        <button class="nav-item" data-act="settings"><span class="chip" style="--h:196">ST</span>${esc(t("settings"))}</button>
-        <button class="nav-item" data-act="sign-out"><span class="chip" style="--h:20">SO</span>${esc(t("sign_out"))}</button>
+        <button class="account" data-act="account-menu" aria-haspopup="menu">
+          ${avatarHTML(me(), "avatar av-lg")}
+          <span class="account-text">
+            <span class="nm">${esc(me()?.display_name || displayName())}</span>
+            <span class="sub">${esc(t("account"))}</span>
+          </span>
+          <svg class="chev" viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5 6 4l3.5 3.5"/></svg>
+        </button>
       </div>
     </aside>
     <div class="main">
       <header class="topbar">
         <h1>${esc(title)}</h1>
         <div class="spacer"></div>
+        ${state.live ? "" : `<span class="offline-chip" title="${esc(t("offline_note"))}"><span class="led"></span>${esc(t("offline"))}</span>`}
         <div class="members" title="${esc(state.members.map((m) => m.display_name).join(" · "))}">
-          ${state.members.map((m) => `<div class="avatar" style="background:hsl(${m.hue} 42% 35%);color:#fff">${esc(initials(m.display_name))}</div>`).join("")}
+          ${state.members.map((m) => avatarHTML(m)).join("")}
         </div>
         <button class="btn btn-primary btn-sm" data-act="new-task">${esc(t("new_task"))}</button>
       </header>
@@ -954,11 +1063,80 @@ function newSectionModal() {
   $("s-name").focus();
 }
 
+function editHabitModal(id) {
+  const h = state.habits.find((x) => x.id === id);
+  if (!h) return;
+  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>${esc(t("edit_habit"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body">
+      <div class="field"><label for="h-name">${esc(t("habit_name"))}</label>
+        <input id="h-name" type="text" value="${esc(h.name)}"></div>
+      <div class="grid2">
+        <div class="field"><label for="h-sec">${esc(t("section"))}</label><select id="h-sec">${sectionOptions(h.section_id)}</select></div>
+        <div class="field"><label for="h-who">${esc(t("who"))}</label><select id="h-who">${assigneeOptions(h.assignee_id ?? "shared")}</select></div>
+      </div>
+      <div class="field"><label for="h-target">${esc(t("frequency"))}</label>
+        <input id="h-target" type="text" value="${esc(habitTarget(h))}" placeholder="${esc(t("frequency_placeholder"))}"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-act="del-habit" data-id="${h.id}">${esc(t("delete_habit"))}</button>
+      <div class="spacer"></div>
+      <button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
+      <button class="btn btn-primary" data-act="update-habit" data-id="${h.id}">${esc(t("save_changes"))}</button>
+    </div>
+  </div></div>`));
+  $("h-name").focus();
+}
+
+/* Small menu anchored to the account button in the sidebar. */
+function accountMenu(anchor) {
+  closeMenu();
+  const rect = anchor.getBoundingClientRect();
+  const menu = el(`<div class="popover" role="menu">
+    <div class="pop-head">
+      ${avatarHTML(me(), "avatar av-lg")}
+      <div style="min-width:0">
+        <div class="nm">${esc(me()?.display_name || displayName())}</div>
+        <div class="sub">${esc(state.user?.email || "")}</div>
+      </div>
+    </div>
+    <button class="pop-item" data-act="settings"><span class="pop-ico">⚙</span>${esc(t("settings"))}</button>
+    <button class="pop-item" data-act="share"><span class="pop-ico">↗</span>${esc(t("sharing"))}</button>
+    <button class="pop-item" data-act="switch-board"><span class="pop-ico">⇄</span>${esc(t("switch_board"))}</button>
+    <div class="pop-sep"></div>
+    <button class="pop-item danger" data-act="sign-out"><span class="pop-ico">⏻</span>${esc(t("sign_out"))}</button>
+  </div>`);
+  document.getElementById("menu-root").appendChild(menu);
+  const width = menu.offsetWidth, height = menu.offsetHeight;
+  const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+  const above = rect.top > height + 16;
+  menu.style.left = `${left}px`;
+  menu.style.top = above ? `${rect.top - height - 8}px` : `${Math.min(rect.bottom + 8, window.innerHeight - height - 8)}px`;
+}
+const closeMenu = () => { const r = document.getElementById("menu-root"); if (r) r.innerHTML = ""; };
+
 function settingsModal() {
   const themes = [["system", t("theme_system")], ["light", t("theme_light")], ["dark", t("theme_dark")]];
   $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("settings_title"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">
+      <div class="row" style="gap:14px;align-items:flex-start">
+        ${avatarHTML(me() || { display_name: displayName(), avatar_url: profileAvatar() }, "avatar av-xl")}
+        <div style="flex:1;min-width:170px">
+          <label>${esc(t("profile_photo"))}</label>
+          <div class="row" style="gap:8px;margin-top:6px">
+            <label class="btn btn-ghost btn-sm" style="text-transform:none;letter-spacing:0;font-family:inherit;font-size:13px;color:var(--ink)">
+              ${esc(t("upload_photo"))}<input type="file" id="set-photo" accept="image/*" hidden>
+            </label>
+            ${profileAvatar() ? `<button class="btn btn-ghost btn-sm" data-act="remove-photo">${esc(t("remove_photo"))}</button>` : ""}
+          </div>
+          <p class="hint" style="margin:6px 0 0">${esc(t("photo_hint"))}</p>
+        </div>
+      </div>
+      ${state.board ? `<div><label>${esc(t("your_colour"))}</label>
+        <div class="swatches">${[163, 210, 288, 38, 345, 120, 262, 16].map((h) =>
+          `<button class="swatch${(me()?.hue ?? 163) === h ? " on" : ""}" style="background:hsl(${h} 42% 40%)" data-act="set-hue" data-hue="${h}" aria-label="${h}"></button>`).join("")}</div>
+        <p class="hint" style="margin:6px 0 0">${esc(t("colour_hint"))}</p></div>` : ""}
       <div><label>${esc(t("language"))}</label>
         <div class="filters" style="margin-top:6px">
           ${["en", "pl"].map((l) => `<button class="fchip${lang === l ? " on" : ""}" data-act="set-lang" data-lang="${l}">${l === "en" ? "English" : "Polski"}</button>`).join("")}
@@ -1014,6 +1192,7 @@ document.addEventListener("click", async (e) => {
       history.replaceState(null, "", window.location.pathname + window.location.search);
       return state.user ? renderBoardPicker() : renderAuth();
     case "sign-out": {
+      closeMenu();
       if (channel) { sb.removeChannel(channel); channel = null; }
       localStorage.removeItem("thelife-board");
       state.board = null;
@@ -1022,8 +1201,15 @@ document.addEventListener("click", async (e) => {
       return;
     }
 
-    /* settings */
-    case "settings": return settingsModal();
+    /* account */
+    case "account-menu": {
+      const open = document.querySelector("#menu-root .popover");
+      if (open) return closeMenu();
+      return accountMenu(b);
+    }
+    case "settings": closeMenu(); return settingsModal();
+    case "set-hue": return saveMemberHue(+b.dataset.hue);
+    case "remove-photo": return removeAvatar();
     case "set-lang": setLang(b.dataset.lang); return rerenderAfterLangOrTheme();
     case "set-theme": {
       theme = b.dataset.theme;
@@ -1044,6 +1230,7 @@ document.addEventListener("click", async (e) => {
     case "create-board": return createBoard();
     case "join-board": return joinBoard();
     case "switch-board": {
+      closeMenu();
       if (channel) { sb.removeChannel(channel); channel = null; }
       localStorage.removeItem("thelife-board");
       state.board = null;
@@ -1103,6 +1290,20 @@ document.addEventListener("click", async (e) => {
     case "add-note": return addNote(b.dataset.sec);
     case "del-note": return deleteNote(b.dataset.id);
     case "add-habit": return addHabit();
+    case "edit-habit": return editHabitModal(b.dataset.id);
+    case "update-habit": {
+      const name = $("h-name").value.trim();
+      if (!name) return toast(t("err_habit_name"));
+      const who = $("h-who").value;
+      const patch = {
+        name, section_id: $("h-sec").value,
+        assignee_id: who === "shared" ? null : who,
+        target: $("h-target").value.trim() || "every day"
+      };
+      closeModal();
+      return updateHabit(b.dataset.id, patch, t("habit_updated"));
+    }
+    case "del-habit": closeModal(); return deleteHabit(b.dataset.id);
     case "habit": return toggleHabitDay(b.dataset.id, b.dataset.day);
     case "new-section": return newSectionModal();
     case "save-section": {
@@ -1113,7 +1314,7 @@ document.addEventListener("click", async (e) => {
     }
 
     /* sharing */
-    case "share": return shareModal();
+    case "share": closeMenu(); return shareModal();
     case "copy-code":
       try { await navigator.clipboard.writeText(state.board.invite_code); toast(t("code_copied")); }
       catch { toast(state.board.invite_code); }
@@ -1138,7 +1339,7 @@ document.addEventListener("change", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeModal();
+  if (e.key === "Escape") { closeModal(); closeMenu(); }
   if (e.key !== "Enter") return;
   const id = e.target.id;
   const click = (sel) => document.querySelector(sel)?.click();
@@ -1150,6 +1351,7 @@ document.addEventListener("keydown", (e) => {
   else if (id === "s-name") click('[data-act="save-section"]');
   else if (id === "nt-title" || id === "nt-body") click('[data-act="add-note"]');
   else if (id === "hb-name") click('[data-act="add-habit"]');
+  else if (id === "h-name" || id === "h-target") click('[data-act="update-habit"]');
   else if (id === "new-board") click('[data-act="create-board"]');
   else if (id === "join-code") click('[data-act="join-board"]');
   else if (id === "np-1" || id === "np-2") click('[data-act="save-password"]');
@@ -1161,6 +1363,12 @@ document.addEventListener("keydown", (e) => {
 
 document.addEventListener("mousedown", (e) => {
   if (e.target.classList?.contains("overlay")) closeModal();
+  if (!e.target.closest?.(".popover") && !e.target.closest?.('[data-act="account-menu"]')) closeMenu();
+});
+
+/* photo picker inside settings */
+document.addEventListener("change", (e) => {
+  if (e.target.id === "set-photo") uploadAvatar(e.target.files?.[0]);
 });
 
 /* ------------------------------------------------------------- boot */
