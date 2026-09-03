@@ -82,7 +82,11 @@ Learning · Dreams · Travel · Household · Car · Finances ·
 Health & Fitness · Work & Career · Family & Friends · Shopping & Pantry · Documents & Renewals
 
 Sections are data, not code — rename them in the `sections` table, or add your own with
-**New section** in the sidebar.
+**New section** in the sidebar. **Delete section** on a section's page removes it together
+with everything inside it, after a dialog that counts what will go.
+
+The board name in the top-left corner is a button: it takes you back to the overview from
+anywhere.
 
 ### Repeating tasks
 

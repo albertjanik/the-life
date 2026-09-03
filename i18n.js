@@ -182,6 +182,15 @@ window.THE_LIFE_I18N = {
     err_note_title: "A note needs a title.",
     no_notes: "No notes in this section yet.",
 
+    /* deleting a section */
+    delete_section: "Delete section",
+    delete_section_q: "Delete “{name}”?",
+    delete_section_body: "Everything inside it goes too: {tasks}, {notes} and {habits}. This cannot be undone.",
+    delete_section_empty: "The section is empty, so nothing else is lost.",
+    section_deleted: "Section “{name}” deleted.",
+    habit_one: "habit", habit_many: "habits",
+    go_overview: "Go to the overview",
+
     /* section page */
     tasks_n: "Tasks ({n})",
     notes_n: "Notes ({n})",
@@ -423,6 +432,15 @@ window.THE_LIFE_I18N = {
     note_deleted: "Notatka usunięta.",
     err_note_title: "Notatka potrzebuje tytułu.",
     no_notes: "Brak notatek w tej sekcji.",
+
+    /* deleting a section */
+    delete_section: "Usuń sekcję",
+    delete_section_q: "Usunąć sekcję „{name}”?",
+    delete_section_body: "Zniknie razem z zawartością: {tasks}, {notes} i {habits}. Tego nie da się cofnąć.",
+    delete_section_empty: "Sekcja jest pusta, więc nic więcej nie przepadnie.",
+    section_deleted: "Sekcja „{name}” usunięta.",
+    habit_one: "nawyk", habit_many: "nawyków",
+    go_overview: "Przejdź do przeglądu",
 
     tasks_n: "Zadania ({n})",
     notes_n: "Notatki ({n})",

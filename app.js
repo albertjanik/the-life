@@ -634,6 +634,24 @@ async function addSection(name) {
   await refreshAll(); renderApp();
 }
 
+async function deleteSection(id) {
+  const sec = secById(id);
+  const name = sectionName(sec);
+  closeModal();
+  state.sections = state.sections.filter((x) => x.id !== id);
+  state.tasks = state.tasks.filter((x) => x.section_id !== id);
+  state.notes = state.notes.filter((x) => x.section_id !== id);
+  state.habits = state.habits.filter((x) => x.section_id !== id);
+  if (state.view.type === "section" && state.view.sec === id) state.view = { type: "overview" };
+  renderApp();
+  for (const table of ["tasks", "notes", "habits"]) {
+    const { error } = await sb.from(table).delete().eq("section_id", id);
+    if (error) { toast(error.message); await refreshAll(); return renderApp(); }
+  }
+  await run(sb.from("sections").delete().eq("id", id), t("section_deleted", { name }));
+  await refreshAll(); renderApp();
+}
+
 async function saveMemberHue(hue) {
   const m = me();
   if (m) m.hue = hue;
@@ -963,7 +981,8 @@ function viewSection(id) {
       <div class="card-body"><p style="margin:0;color:var(--ink-2)">${esc(t("closed_in_section", { n: doneN }))}</p></div></div>`;
   }
   return `<div class="sec-head" style="--h:${s.hue}"><span class="chip chip-lg">${esc(sectionCode(s))}</span>
-      <div><h1>${esc(sectionName(s))}</h1><p>${esc(sectionDesc(s))}</p></div></div>
+      <div style="flex:1;min-width:0"><h1>${esc(sectionName(s))}</h1><p>${esc(sectionDesc(s))}</p></div>
+      <button class="btn btn-ghost btn-sm sec-del" data-act="del-section" data-id="${id}">${esc(t("delete_section"))}</button></div>
     <div class="row" style="justify-content:space-between"><div class="tabs">
       ${[["tasks", t("tasks_n", { n: tasks.length })], ["notes", t("notes_n", { n: notes.length })], ["more", t("habits_history")]]
         .map(([k, label]) => `<button class="tab${state.tab === k ? " on" : ""}" data-act="tab" data-tab="${k}">${esc(label)}</button>`).join("")}
@@ -1018,6 +1037,7 @@ function renderApp() {
   root.innerHTML = `
     <aside class="sidebar">
       <div class="mobile-bar">
+        <button class="brand-mark brand-btn${state.view.type === "overview" ? " active" : ""}" data-act="go" data-view="overview" title="${esc(t("go_overview"))}">TL</button>
         <button class="navdrop" data-act="nav-menu" aria-haspopup="menu" style="--h:${cur.hue}">
           <span class="chip">${esc(cur.code)}</span>
           <span class="navdrop-name">${esc(cur.name)}</span>
@@ -1026,11 +1046,11 @@ function renderApp() {
         <div class="spacer"></div>
         ${accountButtonHTML()}
       </div>
-      <div class="side-head">
-        <div class="brand-mark">TL</div>
-        <div><div class="side-panel-name">${esc(state.board.name)}</div>
-        <div class="side-panel-sub">${esc(state.board.invite_code)}</div></div>
-      </div>
+      <button class="side-head${state.view.type === "overview" ? " active" : ""}" data-act="go" data-view="overview" title="${esc(t("go_overview"))}">
+        <span class="brand-mark">TL</span>
+        <span><span class="side-panel-name">${esc(state.board.name)}</span>
+        <span class="side-panel-sub">${esc(state.board.invite_code)}</span></span>
+      </button>
       <div class="nav-group">${MAIN.map((m) => `
         <button class="nav-item${state.view.type === m.k ? " active" : ""}" style="--h:${m.h}" data-act="go" data-view="${m.k}">
           <span class="chip">${m.code}</span>${esc(m.n)}<span class="nav-count">${counts[m.k]}</span></button>`).join("")}
@@ -1186,6 +1206,27 @@ function shareModal() {
   </div></div>`));
 }
 
+function deleteSectionModal(id) {
+  const sec = secById(id);
+  const tasks = state.tasks.filter((x) => x.section_id === id).length;
+  const notes = state.notes.filter((x) => x.section_id === id).length;
+  const habits = state.habits.filter((x) => x.section_id === id).length;
+  const empty = tasks + notes + habits === 0;
+  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true" style="width:min(430px,100%)">
+    <div class="modal-head"><h2>${esc(t("delete_section_q", { name: sectionName(sec) }))}</h2>
+      <div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body"><p style="margin:0;color:var(--ink-2)">${esc(empty
+      ? t("delete_section_empty")
+      : t("delete_section_body", {
+          tasks: countLabel(tasks, "task_one", "task_many"),
+          notes: countLabel(notes, "note_one", "note_many"),
+          habits: countLabel(habits, "habit_one", "habit_many")
+        }))}</p></div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
+      <button class="btn btn-danger" data-act="confirm-del-section" data-id="${id}">${esc(t("delete_section"))}</button></div>
+  </div></div>`));
+}
+
 function newSectionModal() {
   $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("new_section"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
@@ -1247,18 +1288,12 @@ function navMenu(anchor) {
     <div class="pop-sep"></div>
     <button class="pop-item" data-act="new-section"><span class="pop-ico">+</span>${esc(t("new_section"))}</button>
   </div>`);
-  document.getElementById("menu-root").appendChild(menu);
-  const rect = anchor.getBoundingClientRect();
-  const width = menu.offsetWidth, height = menu.offsetHeight;
-  menu.style.left = `${Math.min(Math.max(8, rect.left), window.innerWidth - width - 8)}px`;
-  menu.style.top = `${Math.min(rect.bottom + 8, window.innerHeight - height - 8)}px`;
-  menu.style.maxHeight = `${window.innerHeight - rect.bottom - 24}px`;
+  placePopover(menu, anchor);
 }
 
 /* Small menu anchored to the account button in the sidebar. */
 function accountMenu(anchor) {
   closeMenu();
-  const rect = anchor.getBoundingClientRect();
   const menu = el(`<div class="popover" role="menu">
     <div class="pop-head">
       ${avatarHTML(me(), "avatar av-lg")}
@@ -1273,14 +1308,39 @@ function accountMenu(anchor) {
     <div class="pop-sep"></div>
     <button class="pop-item danger" data-act="sign-out"><span class="pop-ico">⏻</span>${esc(t("sign_out"))}</button>
   </div>`);
-  document.getElementById("menu-root").appendChild(menu);
-  const width = menu.offsetWidth, height = menu.offsetHeight;
-  const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
-  const above = rect.top > height + 16;
-  menu.style.left = `${left}px`;
-  menu.style.top = above ? `${rect.top - height - 8}px` : `${Math.min(rect.bottom + 8, window.innerHeight - height - 8)}px`;
+  placePopover(menu, anchor);
 }
 const closeMenu = () => { const r = document.getElementById("menu-root"); if (r) r.innerHTML = ""; };
+
+/* Keep a popover inside the window: pick the side with room, cap its height. */
+function placePopover(menu, anchor) {
+  const root = document.getElementById("menu-root");
+  menu.style.visibility = "hidden";
+  menu.style.maxHeight = "";
+  root.appendChild(menu);
+
+  const gap = 8, edge = 8;
+  const a = anchor.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const width = menu.offsetWidth;
+  let height = menu.offsetHeight;
+
+  const below = vh - a.bottom - gap - edge;
+  const above = a.top - gap - edge;
+  let top;
+  if (height <= below) top = a.bottom + gap;
+  else if (height <= above) top = a.top - height - gap;
+  else if (below >= above) { menu.style.maxHeight = `${below}px`; top = a.bottom + gap; }
+  else { menu.style.maxHeight = `${above}px`; height = Math.min(height, above); top = a.top - height - gap; }
+
+  menu.style.left = `${Math.round(Math.min(Math.max(edge, a.left), Math.max(edge, vw - width - edge)))}px`;
+  menu.style.top = `${Math.round(Math.max(edge, top))}px`;
+  menu.style.visibility = "";
+}
+
+/* A popover pinned to a moving target has to go when the page moves under it. */
+window.addEventListener("resize", closeMenu);
+window.addEventListener("scroll", closeMenu, true);
 
 function settingsModal() {
   const themes = [["system", t("theme_system")], ["light", t("theme_light")], ["dark", t("theme_dark")]];
@@ -1505,6 +1565,8 @@ document.addEventListener("click", async (e) => {
     case "del-habit": closeModal(); return deleteHabit(b.dataset.id);
     case "habit": return toggleHabitDay(b.dataset.id, b.dataset.day);
     case "new-section": closeMenu(); return newSectionModal();
+    case "del-section": return deleteSectionModal(b.dataset.id);
+    case "confirm-del-section": return deleteSection(b.dataset.id);
     case "save-section": {
       const name = $("s-name").value.trim();
       if (!name) return toast(t("err_section_name"));
