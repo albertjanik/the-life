@@ -97,6 +97,21 @@ alter table public.tasks
 alter table public.profiles
   add column if not exists avatar_url text;
 
+-- Added later: notes on a task, and its checklist.
+alter table public.tasks
+  add column if not exists description text not null default '';
+
+create table if not exists public.subtasks (
+  id         uuid primary key default gen_random_uuid(),
+  task_id    uuid not null references public.tasks on delete cascade,
+  board_id   uuid not null references public.boards on delete cascade,
+  title      text not null,
+  done       boolean not null default false,
+  position   int  not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists subtasks_task_idx on public.subtasks (task_id, position);
+
 create index if not exists tasks_board_due_idx  on public.tasks (board_id, done, due_date);
 create index if not exists notes_board_idx      on public.notes (board_id, section_id);
 create index if not exists habits_board_idx     on public.habits (board_id);
@@ -154,6 +169,7 @@ alter table public.tasks         enable row level security;
 alter table public.notes         enable row level security;
 alter table public.habits        enable row level security;
 alter table public.habit_days    enable row level security;
+alter table public.subtasks      enable row level security;
 
 drop policy if exists profiles_read   on public.profiles;
 drop policy if exists profiles_update on public.profiles;
@@ -183,7 +199,7 @@ create policy members_leave on public.board_members for delete
 do $$
 declare t text;
 begin
-  foreach t in array array['sections','tasks','notes','habits','habit_days'] loop
+  foreach t in array array['sections','tasks','notes','habits','habit_days','subtasks'] loop
     execute format('drop policy if exists %I_all on public.%I', t, t);
     execute format(
       'create policy %I_all on public.%I for all
@@ -297,7 +313,7 @@ begin
     grant usage on schema public to authenticated;
     grant select, insert, update, delete on
       public.profiles, public.boards, public.board_members, public.sections,
-      public.tasks, public.notes, public.habits, public.habit_days
+      public.tasks, public.notes, public.habits, public.habit_days, public.subtasks
       to authenticated;
   end if;
 end $$;
@@ -311,7 +327,7 @@ grant execute on function public.rotate_invite_code(uuid)      to authenticated;
 do $$
 declare t text;
 begin
-  foreach t in array array['boards','board_members','sections','tasks','notes','habits','habit_days'] loop
+  foreach t in array array['boards','board_members','sections','tasks','notes','habits','habit_days','subtasks'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', t);
     exception when duplicate_object then null;

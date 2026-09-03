@@ -350,10 +350,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
   .auth{grid-template-columns:1fr}
   .auth-art{border-right:none;border-bottom:1px solid var(--line)}
   .shell{grid-template-columns:1fr}
-  .sidebar{position:static;height:auto;flex-direction:row;overflow-x:auto;gap:8px;padding:10px;align-items:center;border-right:none;border-bottom:1px solid var(--line)}
-  .nav-group{flex-direction:row;gap:6px}
-  .nav-title,.nav-count,.side-panel-sub{display:none}
-  .nav-item{white-space:nowrap}
+  .sidebar{position:sticky;top:0;z-index:30;height:auto;padding:8px 10px;border-right:none;border-bottom:1px solid var(--line)}
+  .sidebar > .side-head,
+  .sidebar > .nav-group{display:none}
+  .mobile-bar{display:flex}
   .content{padding:16px}
   .grid2{grid-template-columns:1fr}
   .cal-day{min-height:74px}
@@ -527,4 +527,55 @@ label.check input{width:auto}
 @media (max-width:900px){
   .account{ width:auto;white-space:nowrap }
   .account-text{ display:none }
+}
+
+/* ================= checklists ================= */
+.steps{ list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px }
+.steps.edit{ margin:0 0 8px }
+.step{ display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--ink-2);line-height:1.35 }
+.step.done{ color:var(--ink-3) }
+.step.done span{ text-decoration:line-through }
+.step-tick{
+  width:15px;height:15px;border-radius:4px;border:1.5px solid var(--line-2);flex:none;margin-top:2px;
+  display:grid;place-items:center;transition:background .16s var(--ease),border-color .16s,transform .14s var(--ease);
+}
+.step-tick:hover{ border-color:var(--accent);transform:scale(1.12) }
+.step.done .step-tick{ background:var(--accent);border-color:var(--accent) }
+.step-tick svg{ width:9px;height:9px;opacity:0 }
+.step.done .step-tick svg{ opacity:1 }
+.step .del{ margin-left:auto }
+.steps-badge{ cursor:pointer;transition:background .14s,border-color .14s,color .14s }
+.steps-badge:hover{ border-color:var(--accent);color:var(--accent) }
+.steps-badge.all-done{ border-color:var(--accent);background:var(--accent-soft);color:var(--accent) }
+.steps-editor{ margin-top:6px }
+textarea{ resize:vertical;min-height:64px;font-family:inherit;line-height:1.45 }
+
+/* ================= narrow screens: one dropdown + the account ================= */
+.mobile-bar{ display:none;align-items:center;gap:10px;width:100% }
+.navdrop{
+  display:flex;align-items:center;gap:9px;padding:7px 11px 7px 8px;border-radius:10px;
+  border:1px solid var(--line);background:var(--surface-2);font-weight:600;max-width:62vw;
+  transition:border-color .14s, background .14s, transform .14s var(--ease);
+}
+.navdrop:hover{ border-color:var(--line-2);background:var(--surface) }
+.navdrop:active{ transform:scale(.98) }
+.navdrop-name{ overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+.navdrop .chev{ color:var(--ink-3);flex:none }
+.popover-nav{ min-width:250px;max-width:min(320px,92vw);overflow:auto;overscroll-behavior:contain }
+.pop-label{
+  font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+  font-family:"IBM Plex Mono",monospace;padding:6px 10px 4px;
+}
+.nav-pop{ gap:9px }
+.nav-pop.active{ background:var(--accent-soft);color:var(--ink) }
+.nav-pop-name{ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 }
+.nav-pop .nav-count{ margin-left:auto }
+
+@media (max-width:900px){
+  .mobile-bar{ display:flex }
+  .mobile-bar .account{ width:auto;padding:5px 8px 5px 5px;border-radius:999px }
+  .mobile-bar .account-text{ display:none }
+  .mobile-bar .account .chev{ display:none }
+  .topbar{ padding:10px 16px }
+  .topbar h1{ font-size:17px }
 }

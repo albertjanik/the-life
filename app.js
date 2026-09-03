@@ -170,6 +170,8 @@ const state = {
   tasks: [],
   notes: [],
   habits: [],
+  subtasks: [],
+  expanded: new Set(),    // task ids with their checklist open
   days: new Set(),        // "habitId|YYYY-MM-DD"
   view: { type: "overview" },
   who: "all",             // "all" | user_id | "shared"
@@ -434,14 +436,15 @@ async function openBoard(id) {
 
 async function refreshAll() {
   const id = state.board.id;
-  const [members, profiles, sections, tasks, notes, habits, days] = await Promise.all([
+  const [members, profiles, sections, tasks, notes, habits, days, subtasks] = await Promise.all([
     sb.from("board_members").select("*").eq("board_id", id),
     sb.from("profiles").select("id, email, display_name, avatar_url"),
     sb.from("sections").select("*").eq("board_id", id).order("position"),
     sb.from("tasks").select("*").eq("board_id", id),
     sb.from("notes").select("*").eq("board_id", id).order("created_at", { ascending: false }),
     sb.from("habits").select("*").eq("board_id", id).order("created_at"),
-    sb.from("habit_days").select("habit_id, day").eq("board_id", id).gte("day", off(-70))
+    sb.from("habit_days").select("habit_id, day").eq("board_id", id).gte("day", off(-70)),
+    sb.from("subtasks").select("*").eq("board_id", id).order("position")
   ]);
   const profs = profiles.data || [];
   state.members = (members.data || []).map((m) => {
@@ -454,6 +457,7 @@ async function refreshAll() {
   state.notes = notes.data || [];
   state.habits = habits.data || [];
   state.days = new Set((days.data || []).map((d) => `${d.habit_id}|${d.day}`));
+  state.subtasks = subtasks.data || [];
 }
 
 let refreshTimer = null;
@@ -465,7 +469,7 @@ function scheduleRefresh() {
 function subscribe(boardId) {
   if (channel) sb.removeChannel(channel);
   channel = sb.channel(`board:${boardId}`);
-  ["sections", "tasks", "notes", "habits", "habit_days", "board_members"].forEach((table) => {
+  ["sections", "tasks", "notes", "habits", "habit_days", "subtasks", "board_members"].forEach((table) => {
     channel.on("postgres_changes",
       { event: "*", schema: "public", table, filter: `board_id=eq.${boardId}` }, scheduleRefresh);
   });
@@ -494,11 +498,21 @@ async function addTask(draft) {
     board_id: boardId(), section_id: draft.section_id, title: draft.title.trim(),
     due_date: draft.due_date || off(0), recurrence: draft.recurrence || null,
     recur_from_completion: !!draft.recur_from_completion,
+    description: draft.description || "",
     assignee_id: draft.assignee_id || null, important: !!draft.important, created_by: state.user.id
   };
   state.tasks = state.tasks.concat([{ ...row, id: "tmp" + Math.random(), done: false }]);
   renderApp();
-  await run(sb.from("tasks").insert(row), t("added_to", { section: sectionName(secById(draft.section_id)) }));
+  const { data, error } = await sb.from("tasks").insert(row).select("id");
+  if (error) { toast(error.message); await refreshAll(); return renderApp(); }
+  const newId = Array.isArray(data) ? data[0]?.id : data?.id;
+  const steps = draft.steps || [];
+  if (newId && steps.length) {
+    await sb.from("subtasks").insert(steps.map((title, i) => ({
+      task_id: newId, board_id: boardId(), title, position: i + 1
+    })));
+  }
+  toast(t("added_to", { section: sectionName(secById(draft.section_id)) }));
   await refreshAll(); renderApp();
 }
 
@@ -541,6 +555,36 @@ async function toggleTask(id) {
 async function deleteTask(id) {
   state.tasks = state.tasks.filter((x) => x.id !== id); renderApp();
   await run(sb.from("tasks").delete().eq("id", id), t("task_deleted"));
+}
+
+const stepsOf = (taskId) => state.subtasks.filter((x) => x.task_id === taskId);
+
+async function addSubtask(task_id, title) {
+  const clean = (title || "").trim();
+  if (!clean) return;
+  const position = (stepsOf(task_id).at(-1)?.position ?? 0) + 1;
+  const row = { task_id, board_id: boardId(), title: clean, position };
+  state.subtasks = state.subtasks.concat([{ ...row, id: "tmp" + Math.random(), done: false }]);
+  renderApp();
+  await run(sb.from("subtasks").insert(row));
+  refreshStepEditor();
+  await refreshAll(); renderApp();
+}
+
+async function toggleSubtask(id) {
+  const step = state.subtasks.find((x) => x.id === id);
+  if (!step) return;
+  const done = !step.done;
+  step.done = done; renderApp();
+  await run(sb.from("subtasks").update({ done }).eq("id", id));
+  refreshStepEditor();
+}
+
+async function deleteSubtask(id) {
+  state.subtasks = state.subtasks.filter((x) => x.id !== id);
+  renderApp();
+  await run(sb.from("subtasks").delete().eq("id", id));
+  refreshStepEditor();
 }
 
 async function addNote(section_id) {
@@ -682,6 +726,27 @@ function whoBadge(assignee_id) {
   return avatarHTML(memberById(assignee_id), "who");
 }
 
+function stepsBadge(task) {
+  const steps = stepsOf(task.id);
+  if (!steps.length) return "";
+  const done = steps.filter((x) => x.done).length;
+  const open = state.expanded.has(task.id);
+  return `<button class="badge steps-badge${done === steps.length ? " all-done" : ""}"
+    data-act="toggle-steps" data-id="${task.id}"
+    title="${esc(open ? t("hide_steps") : t("show_steps"))}">☑ ${esc(t("steps_done", { done, total: steps.length }))}</button>`;
+}
+
+function stepsListHTML(task) {
+  if (!state.expanded.has(task.id)) return "";
+  const steps = stepsOf(task.id);
+  if (!steps.length) return "";
+  return `<ul class="steps">${steps.map((x) => `
+    <li class="step${x.done ? " done" : ""}">
+      <button class="step-tick" data-act="toggle-step" data-id="${x.id}" aria-label="${esc(x.title)}">
+        <svg viewBox="0 0 12 12" fill="none" stroke="${x.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
+      </button><span>${esc(x.title)}</span></li>`).join("")}</ul>`;
+}
+
 function taskHTML(task) {
   const s = secById(task.section_id), n = diff(task.due_date);
   const cls = n < 0 ? "od" : n === 0 ? "td" : "";
@@ -696,7 +761,10 @@ function taskHTML(task) {
         <span class="t-date ${cls}">${human(task.due_date)}</span>
         ${task.recurrence ? `<span class="badge rec">↻ ${esc(recLabel(task.recurrence))}${task.recur_from_completion ? " · " + esc(t("badge_from_done")) : ""}</span>` : ""}
         ${task.important ? `<span class="badge pri">${esc(t("important"))}</span>` : ""}
+        ${task.description ? `<span class="badge" title="${esc(task.description)}">≡</span>` : ""}
+        ${stepsBadge(task)}
       </div>
+      ${stepsListHTML(task)}
     </div>
     ${whoBadge(task.assignee_id)}
     <button class="del" data-act="del-task" data-id="${task.id}" aria-label="${esc(t("delete"))}">×</button>
@@ -904,6 +972,31 @@ function viewSection(id) {
 
 /* ------------------------------------------------------------- app shell */
 
+function currentViewLabel() {
+  if (state.view.type === "section") {
+    const sec = secById(state.view.sec);
+    return { name: sectionName(sec), code: sectionCode(sec), hue: sec.hue };
+  }
+  const map = {
+    overview: { name: t("overview"), code: "OV", hue: 163 },
+    upcoming: { name: t("upcoming"), code: "UP", hue: 38 },
+    calendar: { name: t("calendar"), code: "CA", hue: 210 },
+    habits: { name: t("habits"), code: "HA", hue: 295 }
+  };
+  return map[state.view.type] || map.overview;
+}
+
+function accountButtonHTML() {
+  return `<button class="account" data-act="account-menu" aria-haspopup="menu">
+      ${avatarHTML(me(), "avatar av-lg")}
+      <span class="account-text">
+        <span class="nm">${esc(me()?.display_name || displayName())}</span>
+        <span class="sub">${esc(t("account"))}</span>
+      </span>
+      <svg class="chev" viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5 6 4l3.5 3.5"/></svg>
+    </button>`;
+}
+
 function renderApp() {
   if (!state.board) return;
   const MAIN = [
@@ -920,9 +1013,19 @@ function renderApp() {
   else if (state.view.type === "habits") { title = t("habits"); content = viewHabits(); }
   else { title = sectionName(secById(state.view.sec)); content = viewSection(state.view.sec); }
 
+  const cur = currentViewLabel();
   root.className = "shell";
   root.innerHTML = `
     <aside class="sidebar">
+      <div class="mobile-bar">
+        <button class="navdrop" data-act="nav-menu" aria-haspopup="menu" style="--h:${cur.hue}">
+          <span class="chip">${esc(cur.code)}</span>
+          <span class="navdrop-name">${esc(cur.name)}</span>
+          <svg class="chev" viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>
+        </button>
+        <div class="spacer"></div>
+        ${accountButtonHTML()}
+      </div>
       <div class="side-head">
         <div class="brand-mark">TL</div>
         <div><div class="side-panel-name">${esc(state.board.name)}</div>
@@ -941,15 +1044,8 @@ function renderApp() {
         }).join("")}
         <button class="nav-item" style="--h:163" data-act="new-section"><span class="chip">+</span>${esc(t("new_section"))}</button>
       </div>
-      <div class="nav-group" style="margin-top:auto">
-        <button class="account" data-act="account-menu" aria-haspopup="menu">
-          ${avatarHTML(me(), "avatar av-lg")}
-          <span class="account-text">
-            <span class="nm">${esc(me()?.display_name || displayName())}</span>
-            <span class="sub">${esc(t("account"))}</span>
-          </span>
-          <svg class="chev" viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5 6 4l3.5 3.5"/></svg>
-        </button>
+      <div class="nav-group side-account" style="margin-top:auto">
+        ${accountButtonHTML()}
       </div>
     </aside>
     <div class="main">
@@ -970,6 +1066,36 @@ function renderApp() {
 
 const closeModal = () => { $("modal-root").innerHTML = ""; };
 
+function stepEditorHTML(task) {
+  const steps = task ? stepsOf(task.id) : pendingSteps.map((title, i) => ({ id: "p" + i, title, done: false, pending: true }));
+  return `<div class="steps-editor" id="m-steps" data-task="${task ? task.id : ""}">
+    ${steps.length ? `<ul class="steps edit">${steps.map((x) => `
+      <li class="step${x.done ? " done" : ""}">
+        ${x.pending
+          ? `<span class="step-tick" aria-hidden="true"></span>`
+          : `<button class="step-tick" data-act="toggle-step" data-id="${x.id}" aria-label="${esc(x.title)}">
+              <svg viewBox="0 0 12 12" fill="none" stroke="${x.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
+            </button>`}
+        <span>${esc(x.title)}</span>
+        <button class="del" style="opacity:1" data-act="${x.pending ? "del-pending-step" : "del-step"}" data-id="${x.pending ? x.id.slice(1) : x.id}" aria-label="${esc(t("delete"))}">×</button>
+      </li>`).join("")}</ul>` : `<p class="hint" style="margin:0 0 6px">${esc(t("no_steps"))}</p>`}
+    <div class="row" style="gap:6px">
+      <input type="text" id="m-step" placeholder="${esc(t("step_placeholder"))}" style="flex:1">
+      <button class="btn btn-ghost btn-sm" data-act="add-step" data-task="${task ? task.id : ""}">${esc(t("add_step"))}</button>
+    </div>
+  </div>`;
+}
+
+function refreshStepEditor() {
+  const box = $("m-steps");
+  if (!box) return;
+  const id = box.dataset.task;
+  const task = id ? taskById(id) : null;
+  const fresh = el(stepEditorHTML(task));
+  box.replaceWith(fresh);
+  $("m-step")?.focus();
+}
+
 function taskFormHTML(task) {
   const rec = task?.recurrence || "";
   return `
@@ -988,12 +1114,19 @@ function taskFormHTML(task) {
         <input type="checkbox" id="m-fromdone"${task?.recur_from_completion ? " checked" : ""}> ${esc(t("from_completion"))}</label>
       <p class="hint" style="margin:4px 0 0">${esc(t("from_completion_hint"))}</p>
     </div>
-    <label class="check"><input type="checkbox" id="m-pri"${task?.important ? " checked" : ""}> ${esc(t("mark_important"))}</label>`;
+    <label class="check"><input type="checkbox" id="m-pri"${task?.important ? " checked" : ""}> ${esc(t("mark_important"))}</label>
+    <div class="field"><label for="m-desc">${esc(t("description"))}</label>
+      <textarea id="m-desc" rows="3" placeholder="${esc(t("description_placeholder"))}">${esc(task?.description || "")}</textarea></div>
+    <div><label>${esc(t("checklist"))}</label>${stepEditorHTML(task)}</div>`;
 }
+
+let pendingSteps = [];
 
 function readTaskForm() {
   const who = $("m-who").value;
   return {
+    description: $("m-desc").value.trim(),
+    steps: pendingSteps.slice(),
     title: $("m-title").value,
     section_id: $("m-sec").value,
     due_date: $("m-date").value,
@@ -1005,6 +1138,7 @@ function readTaskForm() {
 }
 
 function newTaskModal() {
+  pendingSteps = [];
   $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("new_task"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">${taskFormHTML(null)}</div>
@@ -1086,6 +1220,39 @@ function editHabitModal(id) {
     </div>
   </div></div>`));
   $("h-name").focus();
+}
+
+/* The section picker on narrow screens. */
+function navMenu(anchor) {
+  closeMenu();
+  const MAIN = [
+    { k: "overview", n: t("overview"), code: "OV", h: 163 },
+    { k: "upcoming", n: t("upcoming"), code: "UP", h: 38 },
+    { k: "calendar", n: t("calendar"), code: "CA", h: 210 },
+    { k: "habits", n: t("habits"), code: "HA", h: 295 }
+  ];
+  const item = (view, sec, code, name, hue, count, active) =>
+    `<button class="pop-item nav-pop${active ? " active" : ""}" style="--h:${hue}" data-act="go-close" data-view="${view}"${sec ? ` data-sec="${sec}"` : ""}>
+      <span class="chip">${esc(code)}</span><span class="nav-pop-name">${esc(name)}</span>
+      <span class="nav-count">${count || ""}</span></button>`;
+  const menu = el(`<div class="popover popover-nav" role="menu">
+    ${MAIN.map((m) => item(m.k, null, m.code, m.n, m.h,
+        m.k === "upcoming" ? openTasks().length : m.k === "habits" ? state.habits.length : "",
+        state.view.type === m.k)).join("")}
+    <div class="pop-sep"></div>
+    <div class="pop-label">${esc(t("life_sections"))}</div>
+    ${state.sections.map((sec) => item("section", sec.id, sectionCode(sec), sectionName(sec), sec.hue,
+        state.tasks.filter((x) => x.section_id === sec.id && !x.done).length,
+        state.view.type === "section" && state.view.sec === sec.id)).join("")}
+    <div class="pop-sep"></div>
+    <button class="pop-item" data-act="new-section"><span class="pop-ico">+</span>${esc(t("new_section"))}</button>
+  </div>`);
+  document.getElementById("menu-root").appendChild(menu);
+  const rect = anchor.getBoundingClientRect();
+  const width = menu.offsetWidth, height = menu.offsetHeight;
+  menu.style.left = `${Math.min(Math.max(8, rect.left), window.innerWidth - width - 8)}px`;
+  menu.style.top = `${Math.min(rect.bottom + 8, window.innerHeight - height - 8)}px`;
+  menu.style.maxHeight = `${window.innerHeight - rect.bottom - 24}px`;
 }
 
 /* Small menu anchored to the account button in the sidebar. */
@@ -1238,6 +1405,12 @@ document.addEventListener("click", async (e) => {
     }
 
     /* navigation */
+    case "go-close":
+      closeMenu();
+      state.view = b.dataset.view === "section" ? { type: "section", sec: b.dataset.sec } : { type: b.dataset.view };
+      if (b.dataset.view === "section") state.tab = "tasks";
+      window.scrollTo({ top: 0 });
+      return renderApp();
     case "go":
       state.view = b.dataset.view === "section" ? { type: "section", sec: b.dataset.sec } : { type: b.dataset.view };
       if (b.dataset.view === "section") state.tab = "tasks";
@@ -1274,8 +1447,34 @@ document.addEventListener("click", async (e) => {
     case "update-task": {
       const draft = readTaskForm();
       if (!draft.title.trim()) return toast(t("err_need_title"));
+      delete draft.steps;                 // checklist is saved as you edit it
       closeModal();
       return updateTask(b.dataset.id, draft, t("task_updated"));
+    }
+    case "toggle-steps": {
+      const id = b.dataset.id;
+      if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
+      return renderApp();
+    }
+    case "toggle-step": return toggleSubtask(b.dataset.id);
+    case "del-step": return deleteSubtask(b.dataset.id);
+    case "add-step": {
+      const input = $("m-step");
+      const title = input.value.trim();
+      if (!title) return;
+      input.value = "";
+      if (b.dataset.task) return addSubtask(b.dataset.task, title);
+      pendingSteps.push(title);
+      return refreshStepEditor();
+    }
+    case "del-pending-step": {
+      pendingSteps.splice(+b.dataset.id, 1);
+      return refreshStepEditor();
+    }
+    case "nav-menu": {
+      const open = document.querySelector("#menu-root .popover");
+      if (open) return closeMenu();
+      return navMenu(b);
     }
     case "qa": {
       const who = $("qa-who").value;
@@ -1305,7 +1504,7 @@ document.addEventListener("click", async (e) => {
     }
     case "del-habit": closeModal(); return deleteHabit(b.dataset.id);
     case "habit": return toggleHabitDay(b.dataset.id, b.dataset.day);
-    case "new-section": return newSectionModal();
+    case "new-section": closeMenu(); return newSectionModal();
     case "save-section": {
       const name = $("s-name").value.trim();
       if (!name) return toast(t("err_section_name"));
@@ -1343,6 +1542,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   const id = e.target.id;
   const click = (sel) => document.querySelector(sel)?.click();
+  if (id === "m-step") { e.preventDefault(); return click('[data-act="add-step"]'); }
   if (id === "qa-title") click('[data-act="qa"]');
   else if (id === "m-title") {
     const save = document.querySelector('[data-act="update-task"]') || document.querySelector('[data-act="save-task"]');

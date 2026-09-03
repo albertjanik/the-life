@@ -32,7 +32,7 @@ tables, the access rules and the `create_board` / `join_board` functions.
 
 The file is written to be run again at any time: when a change here adds a column, re-running
 it is the whole migration. (Run it again if your project predates the `recur_from_completion`
-column on `tasks` or `avatar_url` on `profiles`.)
+or `description` columns on `tasks`, `avatar_url` on `profiles`, or the `subtasks` table.)
 
 **3. Turn off email confirmation** (optional, but easier for two people).
 **Authentication → Sign In / Providers → Email** → switch **Confirm email** off. With it on,
@@ -96,11 +96,30 @@ Each repeating task also carries a switch, **off by default**:
 - **on** — *count the next date from when it's ticked off*. Wash the car four days early and
   the next one is due a week from that moment, not from the old date.
 
-### Editing
+### Editing, notes and checklists
 
 Click a task's title — anywhere it appears, the calendar included — to edit it: title,
 section, date, repeat rule, who it belongs to, whether it's important. Clicking the section
 name on a task jumps straight to that section.
+
+A task can also carry **notes** (account numbers, an address, what was agreed) and a
+**checklist**. The list shows up on the task as a `☑ 2/5` badge; click it and the steps
+unfold under the task, tickable one by one, without opening anything. The badge turns green
+when the last step is done.
+
+<p align="center">
+  <img src="docs/checklist.png" width="62%" alt="A task with its checklist open">
+</p>
+
+### On a phone
+
+Below 900 px the sidebar folds into a single bar: the section you are in becomes a dropdown
+that opens every view and every section, and your account sits on the right. Nothing scrolls
+sideways.
+
+<p align="center">
+  <img src="docs/mobile.png" width="34%" alt="The section dropdown on a phone">
+</p>
 
 ### Small things that matter
 

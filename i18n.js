@@ -138,6 +138,17 @@ window.THE_LIFE_I18N = {
     from_completion_hint: "Off: the task keeps its fixed rhythm (every week on the same day). On: ticking it off early starts the next period from that moment.",
     badge_from_done: "from completion",
 
+    /* description & subtasks */
+    description: "Notes",
+    description_placeholder: "Anything worth remembering: numbers, addresses, what was agreed…",
+    checklist: "Checklist",
+    add_step: "Add a step",
+    step_placeholder: "One step, then Enter",
+    steps_done: "{done}/{total}",
+    no_steps: "No steps yet.",
+    show_steps: "Show the checklist",
+    hide_steps: "Hide the checklist",
+
     /* dates */
     today: "today",
     tomorrow: "tomorrow",
@@ -371,6 +382,17 @@ window.THE_LIFE_I18N = {
     from_completion: "Licz następny termin od momentu odhaczenia",
     from_completion_hint: "Wyłączone: zadanie trzyma sztywny rytm (co tydzień tego samego dnia). Włączone: odhaczenie przed czasem zaczyna kolejny okres od tego momentu.",
     badge_from_done: "od odhaczenia",
+
+    /* description & subtasks */
+    description: "Notatki",
+    description_placeholder: "Co warto pamiętać: numery, adresy, ustalenia…",
+    checklist: "Lista kroków",
+    add_step: "Dodaj krok",
+    step_placeholder: "Jeden krok, potem Enter",
+    steps_done: "{done}/{total}",
+    no_steps: "Brak kroków.",
+    show_steps: "Pokaż listę kroków",
+    hide_steps: "Ukryj listę kroków",
 
     today: "dziś",
     tomorrow: "jutro",
