@@ -133,6 +133,16 @@ window.THE_LIFE_I18N = {
     task_one: "task", task_many: "tasks",
     note_one: "note", note_many: "notes",
 
+    /* how far ahead the task list looks */
+    range_today: "Today",
+    range_week: "A week",
+    range_month: "A month",
+    range_year: "A year",
+    range_all: "Everything",
+    range_label: "How far ahead",
+    nothing_in_range: "Nothing due in this stretch.",
+    later_waiting: "{n} further ahead — widen the range to see them.",
+
     /* tasks */
     everyone: "Everyone",
     shared: "Shared",
@@ -439,6 +449,16 @@ window.THE_LIFE_I18N = {
     no_open_tasks: "Brak otwartych zadań",
     task_one: "zadanie", task_many: "zadań",
     note_one: "notatka", note_many: "notatek",
+
+    /* how far ahead the task list looks */
+    range_today: "Dziś",
+    range_week: "Tydzień",
+    range_month: "Miesiąc",
+    range_year: "Rok",
+    range_all: "Wszystko",
+    range_label: "Jak daleko w przód",
+    nothing_in_range: "Nic w tym zakresie.",
+    later_waiting: "Dalej czeka {n} — poszerz zakres, żeby je zobaczyć.",
 
     everyone: "Wszyscy",
     shared: "Wspólne",

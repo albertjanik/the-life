@@ -199,6 +199,7 @@ const state = {
   days: new Set(),        // "habitId|YYYY-MM-DD"
   view: { type: "overview" },
   who: "all",             // "all" | user_id | "shared"
+  range: "today",         // how far ahead the task list looks
   tab: "tasks",
   calMonth: new Date(today.getFullYear(), today.getMonth(), 1),
   live: false,
@@ -782,6 +783,20 @@ function whoOk(row) {
 }
 const openTasks = () => state.tasks.filter((x) => !x.done && whoOk(x));
 
+/* How far ahead the Tasks list looks. Anything overdue always shows: a date
+   that has passed is not "later", it is waiting. */
+const RANGES = { today: 0, week: 7, month: 31, year: 365, all: Infinity };
+const inRange = (task) => diff(task.due_date) <= RANGES[state.range];
+
+function rangePickerHTML() {
+  return `<label class="range" title="${esc(t("range_label"))}">
+    <select data-act="range">
+      ${Object.keys(RANGES).map((k) =>
+        `<option value="${k}"${state.range === k ? " selected" : ""}>${esc(t("range_" + k))}</option>`).join("")}
+    </select>
+  </label>`;
+}
+
 function whoBadge(assignee_id) {
   if (!assignee_id) {
     const [a, b] = state.members;
@@ -947,9 +962,19 @@ function addBarHTML(kind, sectionId) {
 }
 
 function viewUpcoming() {
-  return `<div class="row" style="justify-content:space-between;margin-bottom:14px">${filtersHTML()}
+  const all = openTasks();
+  const shown = all.filter(inRange);
+  const later = all.length - shown.length;
+  const list = shown.length
+    ? groupsHTML(shown)
+    : `<div class="empty">${esc(t("nothing_in_range"))}${later
+        ? ` <span class="hint">${esc(t("later_waiting", { n: countLabel(later, "task_one", "task_many") }))}</span>` : ""}</div>`;
+  return `<div class="row" style="justify-content:space-between;margin-bottom:14px">
+      <div class="row" style="gap:10px">${rangePickerHTML()}${filtersHTML()}</div>
       <button class="btn btn-ghost btn-sm" data-act="go" data-view="calendar">${esc(t("calendar_view"))}</button></div>
-    ${groupsHTML(openTasks())}${addBarHTML("task")}`;
+    ${list}
+    ${shown.length && later ? `<p class="hint" style="margin:12px 0 0">${esc(t("later_waiting", { n: countLabel(later, "task_one", "task_many") }))}</p>` : ""}
+    ${addBarHTML("task")}`;
 }
 
 function viewCalendar() {
@@ -1052,7 +1077,7 @@ function renderApp() {
     { k: "habits", n: t("habits"), code: "HA", h: 295 }
   ];
   const counts = {
-    overview: "", upcoming: openTasks().length, calendar: "",
+    overview: "", upcoming: openTasks().filter(inRange).length, calendar: "",
     habits: state.habits.filter((h) => whoOk(h)).length
   };
   let title = t("overview"), content = "";
@@ -1062,7 +1087,7 @@ function renderApp() {
   else if (state.view.type === "habits") { title = t("habits"); content = viewHabits(); }
   else { title = sectionName(secById(state.view.sec)); content = viewSection(state.view.sec); }
 
-  const viewKey = [state.view.type, state.view.sec || "", state.tab, state.who, lang].join("|");
+  const viewKey = [state.view.type, state.view.sec || "", state.tab, state.who, state.range, lang].join("|");
   const entering = viewKey !== lastViewKey;
   lastViewKey = viewKey;
 
@@ -1807,6 +1832,11 @@ document.addEventListener("click", async (e) => {
 
 /* show or hide the "count from completion" option with the repeat select */
 document.addEventListener("change", (e) => {
+  if (e.target.dataset?.act === "range") {
+    state.range = e.target.value;
+    try { localStorage.setItem("thelife-range", state.range); } catch {}
+    return renderApp();
+  }
   if (e.target.id !== "m-rec") return;
   const wrap = $("m-fromdone-wrap");
   if (wrap) wrap.classList.toggle("hidden", !e.target.value);

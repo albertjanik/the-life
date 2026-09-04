@@ -69,7 +69,7 @@ GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow
 | Sign in | Real accounts: email and password, session kept across devices, password reset by email |
 | Boards | Your boards, create a new one, or join one with an invite code |
 | Overview | Overdue / due today / this week / habits, what's next, and the section grid |
-| Tasks | Every task on one timeline: Overdue → Today → Tomorrow → This week → Next week → Later |
+| Tasks | One timeline: Overdue → Today → Tomorrow → This week → Next week → Later, cut to how far ahead you want to look — **today** by default, or a week, a month, a year, everything |
 | Calendar | Month view; the colour bar is the section, a red outline means the date has passed |
 | Habits | 14-day grid, click any day (past days included), streaks; a habit ticked off today lights up in its owner's colour and says whose it is. Click a habit's name to rename it, move it, change how often or delete it |
 | Section | Tasks, notes, habits and history for that part of life |
@@ -85,6 +85,14 @@ Health & Fitness · Work & Career · Family & Friends · Shopping & Pantry · Do
 Sections are data, not code — rename them in the `sections` table, or add your own with
 **New section** in the navigation. **Delete section** on a section's page removes it together
 with everything inside it, after a dialog that counts what will go.
+
+### How far ahead
+
+The Tasks list opens on **today**: what has slipped, plus what is due now. The picker to the
+left of the person filters widens it to a week, a month, a year or everything, and remembers
+what you chose on that device. Overdue tasks are in every range — a date that has passed is
+not "later", it is waiting — and a line under the list says how many tasks sit beyond the
+range you are looking at.
 
 ### Repeating tasks
 
