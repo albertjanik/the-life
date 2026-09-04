@@ -40,6 +40,12 @@ document.addEventListener("wheel", (e) => {
   if (e.ctrlKey) e.preventDefault();                     // trackpad pinch on a laptop
 }, { passive: false });
 
+/* A short buzz where a finger expects one. Android honours it; iOS Safari
+   has no Vibration API, so this is simply nothing there. */
+function buzz(pattern) {
+  try { navigator.vibrate?.(pattern); } catch {}
+}
+
 /* ------------------------------------------------------------- language */
 
 function detectLang() {
@@ -213,6 +219,12 @@ function initials(name) {
   const parts = String(name || "?").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   return ((parts[0]?.[0] || "?") + (parts[1]?.[0] || "")).toUpperCase();
 }
+const memberHue = (id) => (id ? memberById(id)?.hue ?? 163 : null);
+const memberName = (id) => (id ? memberById(id)?.display_name || "" : t("by_shared"));
+
+/* A row belongs to whoever it is assigned to; shared rows keep the section colour. */
+const rowHue = (row, section) => (row.assignee_id ? memberHue(row.assignee_id) : section?.hue ?? 163);
+
 function avatarHTML(member, cls = "avatar") {
   const hue = member?.hue ?? 163;
   const name = member?.display_name || "";
@@ -558,12 +570,13 @@ async function toggleTask(id) {
   if (!task) return;
   if (task.recurrence && !task.done) {
     const nd = nextDate(task);
+    buzz([10, 40, 14]);
     await playRowExit(id, "shifting");
     task.due_date = nd; renderApp();
     await run(sb.from("tasks").update({ due_date: nd }).eq("id", id), t("next_time", { when: human(nd) }));
   } else {
     const done = !task.done;
-    if (done) await playRowExit(id, "leaving");
+    if (done) { buzz(18); await playRowExit(id, "leaving"); }
     task.done = done; renderApp();
     await run(sb.from("tasks").update({ done, done_at: done ? new Date().toISOString() : null }).eq("id", id),
       done ? t("task_closed") : null);
@@ -593,6 +606,7 @@ async function toggleSubtask(id) {
   const step = state.subtasks.find((x) => x.id === id);
   if (!step) return;
   const done = !step.done;
+  if (done) buzz(8);
   step.done = done; renderApp();
   await run(sb.from("subtasks").update({ done }).eq("id", id));
   refreshStepEditor();
@@ -633,6 +647,7 @@ async function toggleHabitDay(habit_id, day) {
     await run(sb.from("habit_days").delete().eq("habit_id", habit_id).eq("day", day));
   } else {
     state.days.add(key);
+    buzz(12);
     fx = { pop: key };
     clearTimeout(fxTimer);
     fxTimer = setTimeout(() => { fx = { pop: null }; }, 600);
@@ -783,10 +798,12 @@ function stepsListHTML(task) {
       </button><span>${esc(x.title)}</span></li>`).join("")}</ul>`;
 }
 
-function taskHTML(task) {
+function taskHTML(task, i = 0) {
   const s = secById(task.section_id), n = diff(task.due_date);
   const cls = n < 0 ? "od" : n === 0 ? "td" : "";
-  return `<div class="task${task.done ? " done" : ""}" style="--h:${s.hue}" data-id="${task.id}">
+  const p = task.assignee_id ? memberHue(task.assignee_id) : s.hue;
+  return `<div class="task${task.done ? " done" : ""}${task.assignee_id ? " mine" : ""}"
+    style="--h:${s.hue};--p:${p};--i:${Math.min(i, 12)}" data-id="${task.id}">
     <button class="tick" data-act="toggle" data-id="${task.id}" aria-label="${esc(t("today"))}">
       <svg viewBox="0 0 12 12" fill="none" stroke="${task.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
     </button>
@@ -802,7 +819,9 @@ function taskHTML(task) {
       </div>
       ${stepsListHTML(task)}
     </div>
-    ${whoBadge(task.assignee_id)}
+    <span class="who-wrap" title="${esc(memberName(task.assignee_id))}">
+      ${whoBadge(task.assignee_id)}<span class="who-name">${esc(memberName(task.assignee_id))}</span>
+    </span>
     <button class="del" data-act="del-task" data-id="${task.id}" aria-label="${esc(t("delete"))}">×</button>
   </div>`;
 }
@@ -824,7 +843,7 @@ function groupsHTML(list) {
   });
   const out = groups.filter((g) => g.items.length).map((g) =>
     `<section class="tgroup ${g.k}"><div class="tgroup-head"><h3>${esc(g.t)}</h3><span class="n">${g.items.length}</span></div>
-     <div class="tlist">${g.items.map(taskHTML).join("")}</div></section>`).join("");
+     <div class="tlist">${g.items.map((x, i) => taskHTML(x, i)).join("")}</div></section>`).join("");
   return out || `<div class="empty">${esc(t("empty_tasks"))}</div>`;
 }
 
@@ -874,13 +893,14 @@ function viewOverview() {
     <div class="ov-grid" style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;margin-top:16px">
       <div class="card"><div class="card-head"><h2>${esc(t("coming_up"))}</h2><div class="spacer"></div>
         <button class="btn btn-ghost btn-sm" data-act="go" data-view="upcoming">${esc(t("full_list"))}</button></div>
-        <div class="card-body"><div class="tlist">${next.length ? next.map(taskHTML).join("") : `<div class="empty">${esc(t("nothing_waiting"))}</div>`}</div></div></div>
+        <div class="card-body"><div class="tlist">${next.length ? next.map((x, i) => taskHTML(x, i)).join("") : `<div class="empty">${esc(t("nothing_waiting"))}</div>`}</div></div></div>
       <div class="card"><div class="card-head"><h2>${esc(t("habits_today"))}</h2></div><div>
-        ${state.habits.length ? state.habits.map((h) => `
-          <div class="hab${ticked(h, off(0)) ? " done-today" : ""}" style="--h:${secById(h.section_id).hue}">
+        ${state.habits.length ? state.habits.map((h, i) => `
+          <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop === h.id + "|" + off(0) ? " just-done" : ""}"
+            style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}">
             <div class="hab-name">
               <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
-              <div class="s">${esc(habitTarget(h))}</div></div>
+              <div class="s">${esc(memberName(h.assignee_id))} · ${esc(habitTarget(h))}</div></div>
             <button class="hcell today${ticked(h, off(0)) ? " on" : ""}${fx.pop === h.id + "|" + off(0) ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${off(0)}"></button>
           </div>`).join("") : `<div class="empty" style="margin:14px">${esc(t("no_habits_yet"))}</div>`}
       </div></div>
@@ -948,12 +968,14 @@ function viewHabits() {
       ${filtersHTML()}</div>
     <div class="card"><div class="card-head"><h2>${esc(t("habits"))}</h2><div class="spacer"></div>
       <span class="hint mono" style="font-size:11px">${first.getDate()} ${esc(names().monthShort[first.getMonth()])} → ${esc(t("today"))}</span></div>
-      <div>${visible.length ? visible.map((h) => `
-        <div class="hab${ticked(h, off(0)) ? " done-today" : ""}" style="--h:${secById(h.section_id).hue}">
+      <div>${visible.length ? visible.map((h, i) => `
+        <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop && fx.pop.startsWith(h.id + "|") ? " just-done" : ""}"
+          style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}">
           <div class="hab-name">
             <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
             <div class="s"><button class="sec-link" data-act="go" data-view="section" data-sec="${h.section_id}">${esc(sectionName(secById(h.section_id)))}</button> · ${esc(habitTarget(h))}</div></div>
-          ${whoBadge(h.assignee_id)}
+          <span class="who-wrap" title="${esc(memberName(h.assignee_id))}">
+            ${whoBadge(h.assignee_id)}<span class="who-name">${esc(memberName(h.assignee_id))}</span></span>
           <div class="hgrid">${days.map((d) =>
             `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}${fx.pop === h.id + "|" + d ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}" title="${d}"></button>`).join("")}</div>
           <div class="streak">${esc(t("habit_streak", { n: streak(h) }))}</div>
@@ -989,9 +1011,11 @@ function viewSection(id) {
   } else {
     body = `<div class="card"><div class="card-head"><h2>${esc(t("habits_in_section"))}</h2></div><div>
       ${habs.length ? habs.map((h) => `
-        <div class="hab${ticked(h, off(0)) ? " done-today" : ""}" style="--h:${s.hue}"><div class="hab-name">
+        <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop && fx.pop.startsWith(h.id + "|") ? " just-done" : ""}"
+          style="--h:${rowHue(h, s)}"><div class="hab-name">
           <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
-          <div class="s">${esc(habitTarget(h))}</div></div>
+          <div class="s">${esc(memberName(h.assignee_id))} · ${esc(habitTarget(h))}</div></div>
+          <span class="who-wrap" title="${esc(memberName(h.assignee_id))}">${whoBadge(h.assignee_id)}</span>
         <div class="hgrid">${habitDays().map((d) => `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}${fx.pop === h.id + "|" + d ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}"></button>`).join("")}</div></div>`).join("")
         : `<div class="empty" style="margin:14px">${esc(t("no_habits_here"))}</div>`}
       </div></div>
@@ -1358,7 +1382,12 @@ function placePopover(menu, anchor) {
 
 /* A popover pinned to a moving target has to go when the page moves under it. */
 window.addEventListener("resize", closeMenu);
-window.addEventListener("scroll", closeMenu, true);
+window.addEventListener("scroll", (e) => {
+  // the menu scrolls inside itself when it is long — that is not a page scroll
+  const el = e.target;
+  if (el && el.closest && el.closest(".popover")) return;
+  closeMenu();
+}, true);
 
 function settingsModal() {
   const themes = [["system", t("theme_system")], ["light", t("theme_light")], ["dark", t("theme_dark")]];
@@ -1379,8 +1408,12 @@ function settingsModal() {
         </div>
       </div>
       ${state.board ? `<div><label>${esc(t("your_colour"))}</label>
-        <div class="swatches">${[163, 210, 288, 38, 345, 120, 262, 16].map((h) =>
-          `<button class="swatch${(me()?.hue ?? 163) === h ? " on" : ""}" style="background:hsl(${h} 42% 40%)" data-act="set-hue" data-hue="${h}" aria-label="${h}"></button>`).join("")}</div>
+        <div class="swatches">${[163, 210, 288, 38, 345, 120, 262, 16].map((h) => {
+          const taken = state.members.find((m) => m.user_id !== state.user.id && m.hue === h);
+          return `<button class="swatch${(me()?.hue ?? 163) === h ? " on" : ""}${taken ? " taken" : ""}"
+            style="background:hsl(${h} 42% 40%)" data-act="set-hue" data-hue="${h}"
+            title="${esc(taken ? t("colour_taken", { name: taken.display_name }) : "")}"></button>`;
+        }).join("")}</div>
         <p class="hint" style="margin:6px 0 0">${esc(t("colour_hint"))}</p></div>` : ""}
       <div><label>${esc(t("language"))}</label>
         <div class="filters" style="margin-top:6px">
@@ -1678,6 +1711,69 @@ sb.auth.onAuthStateChange(async (event, session) => {
   }
   renderBoardPicker();
 });
+
+/* Pull down at the top of the page to refresh — with the rubber band the
+   browser's own gesture would have given us, and a spring back on release. */
+(function pullToRefresh() {
+  const THRESHOLD = 70, MAX = 120, DAMPING = 0.45;
+  let startY = 0, pulling = false, dist = 0, busy = false;
+
+  const bar = document.createElement("div");
+  bar.id = "pull";
+  bar.innerHTML = `<span class="pull-ring"><span class="pull-arrow">↓</span></span>`;
+  document.body.appendChild(bar);
+
+  const scroller = () => document.scrollingElement || document.documentElement;
+  const spring = (on) => {
+    root.style.transition = on ? "transform .34s cubic-bezier(.2,.7,.3,1)" : "";
+    bar.style.transition = on ? "opacity .3s, transform .34s cubic-bezier(.2,.7,.3,1)" : "";
+  };
+  const setPull = (d) => {
+    dist = d;
+    root.style.transform = d ? `translateY(${d.toFixed(1)}px)` : "";
+    bar.style.opacity = Math.min(1, d / THRESHOLD);
+    bar.style.transform = `translate(-50%, ${(Math.min(d, MAX) * 0.62).toFixed(1)}px) scale(${(0.72 + Math.min(d, MAX) / MAX * 0.28).toFixed(2)})`;
+    bar.classList.toggle("ready", d >= THRESHOLD);
+  };
+
+  document.addEventListener("touchstart", (e) => {
+    if (busy || e.touches.length !== 1 || !state.board) return;
+    if (scroller().scrollTop > 0) return;
+    if (e.target.closest?.(".popover, .modal, .cal, .hgrid, input, textarea, select")) return;
+    startY = e.touches[0].clientY;
+    pulling = true;
+    spring(false);
+  }, { passive: true });
+
+  document.addEventListener("touchmove", (e) => {
+    if (!pulling || busy || e.touches.length !== 1) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { if (dist) setPull(0); return; }
+    if (scroller().scrollTop > 0) { pulling = false; setPull(0); return; }
+    e.preventDefault();                       // the page stays; the rubber band is ours
+    setPull(Math.min(MAX, dy * DAMPING));
+  }, { passive: false });
+
+  document.addEventListener("touchend", async () => {
+    if (!pulling || busy) return;
+    pulling = false;
+    const go = dist >= THRESHOLD;
+    spring(true);
+    if (go) {
+      busy = true;
+      bar.classList.add("busy");
+      buzz(10);
+      setPull(54);
+      try { await refreshAll(); renderApp(); } catch {}
+      await wait(260);
+      bar.classList.remove("busy", "ready");
+      busy = false;
+      toast(t("refreshed"));
+    }
+    setPull(0);
+    setTimeout(() => spring(false), 360);
+  }, { passive: true });
+})();
 
 (async () => {
   const { data } = await sb.auth.getSession();

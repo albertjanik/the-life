@@ -448,12 +448,12 @@ label.check input{width:auto}
 @keyframes drawTick{ from{stroke-dashoffset:16} to{stroke-dashoffset:0} }
 @keyframes rowLeave{
   0%   {opacity:1;transform:none;max-height:var(--row-h,80px)}
-  35%  {opacity:1;transform:scale(.985);background:var(--accent-soft);border-color:var(--accent)}
+  35%  {opacity:1;transform:scale(.985);background:var(--flash, var(--accent-soft));border-color:var(--accent)}
   100% {opacity:0;transform:translateX(26px) scale(.97);max-height:0;margin-top:-6px;padding-top:0;padding-bottom:0;border-width:0}
 }
 @keyframes rowShift{
   0%   {opacity:1;transform:none}
-  30%  {background:var(--accent-soft);border-color:var(--accent)}
+  30%  {background:var(--flash, var(--accent-soft));border-color:var(--accent)}
   100% {opacity:0;transform:translateX(34px)}
 }
 @keyframes ledPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
@@ -483,10 +483,13 @@ label.check input{width:auto}
 
 /* a habit ticked off today reads as done at a glance */
 .hab{ transition:background .25s var(--ease), box-shadow .25s }
-.hab.done-today{
+.hab{position:relative;isolation:isolate}
+.hab.done-today::before{
+  content:"";position:absolute;inset:0;z-index:-1;
   background:linear-gradient(90deg, var(--cat-bg) 0%, transparent 78%);
   box-shadow:inset 3px 0 0 var(--cat-fg);
 }
+.hab.done-today.just-done::before{ animation:tintIn .5s var(--ease) both }
 .hab.done-today .hab-name .n{ color:var(--cat-fg) }
 .hab-open{ font-weight:600;text-align:left;color:inherit;border-radius:5px }
 .hab-open:hover{ text-decoration:underline;text-underline-offset:2px }
@@ -621,3 +624,66 @@ textarea{ resize:vertical;min-height:64px;font-family:inherit;line-height:1.45 }
 }
 /* Double-tap zoom off, tap latency gone; scrolling and panning stay. */
 button,.task,.hab,.cal-day,.nav-item,.fchip,.tab,.chip,.avatar,.who,label.check{ touch-action:manipulation }
+
+/* ================= steady bars ================= */
+.topbar{ height:58px;min-height:58px;max-height:58px }
+@media (max-width:900px){
+  .sidebar{ height:60px;min-height:60px;display:flex;align-items:center;overflow:hidden }
+  .mobile-bar{ height:44px;min-height:44px;flex-wrap:nowrap;overflow:hidden }
+  .navdrop{ height:38px;flex:0 1 auto;min-width:0 }
+}
+
+/* ================= things arrive, they don't blink into place ================= */
+@keyframes riseIn{ from{opacity:0;transform:translateY(9px)} to{opacity:1;transform:none} }
+@keyframes tintIn{ from{opacity:0;transform:translateX(-14px)} to{opacity:1;transform:none} }
+@keyframes fadeSlide{ from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:none} }
+
+.task,.hab,.sec-card,.stat,.note{
+  animation:riseIn .3s var(--ease) both;
+  animation-delay:calc(var(--i, 0) * 22ms);
+}
+.tgroup-head,.steps .step{ animation:fadeSlide .26s var(--ease) both }
+.steps .step:nth-child(2){ animation-delay:40ms }
+.steps .step:nth-child(3){ animation-delay:80ms }
+.steps .step:nth-child(n+4){ animation-delay:120ms }
+
+/* ================= who a row belongs to ================= */
+.who-wrap{ display:inline-flex;align-items:center;gap:6px;flex:none;max-width:132px }
+.who-name{
+  font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.task.mine .who-name{ color:hsl(var(--p) 38% 40%) }
+.task.mine .tick:hover{ border-color:hsl(var(--p) 45% 42%) }
+.task.mine.done .tick,.task.mine.leaving .tick,.task.mine.shifting .tick{
+  background:hsl(var(--p) 45% 36%);border-color:hsl(var(--p) 45% 36%);
+}
+.task.leaving,.task.shifting{ --flash:hsl(var(--p) 40% 92%) }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .task.mine .who-name{ color:hsl(var(--p) 45% 68%) }
+  :root:not([data-theme="light"]) .task.leaving,
+  :root:not([data-theme="light"]) .task.shifting{ --flash:hsl(var(--p) 30% 20%) }
+}
+:root[data-theme="dark"] .task.mine .who-name{ color:hsl(var(--p) 45% 68%) }
+:root[data-theme="dark"] .task.leaving,
+:root[data-theme="dark"] .task.shifting{ --flash:hsl(var(--p) 30% 20%) }
+@media (max-width:520px){ .who-name{ display:none } }
+.swatch.taken{ opacity:.4 }
+.swatch.taken:hover{ opacity:.7 }
+
+/* ================= pull to refresh ================= */
+#pull{
+  position:fixed;top:6px;left:50%;z-index:40;opacity:0;pointer-events:none;
+  transform:translate(-50%,0) scale(.72);
+}
+.pull-ring{
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+  color:var(--ink-3);font-size:15px;
+}
+#pull.ready .pull-ring{ background:var(--accent-soft);border-color:var(--accent);color:var(--accent) }
+#pull.ready .pull-arrow{ transform:rotate(180deg) }
+.pull-arrow{ display:block;transition:transform .22s var(--ease) }
+#pull.busy .pull-ring{
+  background:var(--accent);border-color:var(--accent);color:var(--on-accent);
+}
+#pull.busy .pull-arrow{ animation:sp .7s linear infinite }

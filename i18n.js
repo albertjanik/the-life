@@ -215,6 +215,14 @@ window.THE_LIFE_I18N = {
     code_rotated: "New invite code generated.",
     close: "Close",
 
+    /* pull to refresh, authors */
+    pull_to_refresh: "Pull to refresh",
+    release_to_refresh: "Release to refresh",
+    refreshing: "Refreshing…",
+    refreshed: "Up to date.",
+    colour_taken: "{name} uses this one",
+    by_shared: "Shared",
+
     /* account */
     account: "Account",
     profile_photo: "Profile picture",
@@ -463,6 +471,14 @@ window.THE_LIFE_I18N = {
     code_copied: "Kod skopiowany.",
     code_rotated: "Wygenerowano nowy kod.",
     close: "Zamknij",
+
+    /* pull to refresh, authors */
+    pull_to_refresh: "Pociągnij, aby odświeżyć",
+    release_to_refresh: "Puść, aby odświeżyć",
+    refreshing: "Odświeżam…",
+    refreshed: "Wszystko aktualne.",
+    colour_taken: "{name} ma ten kolor",
+    by_shared: "Wspólne",
 
     /* account */
     account: "Konto",
