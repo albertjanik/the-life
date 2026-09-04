@@ -80,6 +80,7 @@ html{
 body{
   touch-action:pan-x pan-y;overscroll-behavior:none;
   -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
 
   margin:0;
   background:var(--paper);
@@ -368,7 +369,18 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 }
 #toast.on{opacity:1;transform:translate(-50%,0)}
 
-@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+@media (prefers-reduced-motion: reduce){
+  *{transition-duration:.01ms !important}
+  .content,.task,.hab,.sec-card,.stat,.note,.tgroup-head,.steps .step,
+  .drawer-body .nav-item,.modal,.overlay,.popover{animation:none !important}
+  .task.leaving{animation:rowLeaveQuiet .34s ease forwards !important}
+  .task.shifting{animation:rowLeaveQuiet .3s ease forwards !important}
+  .hcell.pop,.hab.done-today.just-done::before{animation:none !important}
+}
+@keyframes rowLeaveQuiet{
+  0%   {opacity:1;background:var(--flash, var(--accent-soft))}
+  100% {opacity:0;max-height:0;margin-top:-6px;padding-top:0;padding-bottom:0;border-width:0}
+}
 @media (max-width:960px){ .ov-grid{grid-template-columns:1fr !important} }
 @media (max-width:900px){
   .auth{grid-template-columns:1fr}
@@ -815,3 +827,10 @@ body.locked{ overflow:hidden }
 .modal-body{ overflow-x:hidden }
 input[type=date]{ width:100%;max-width:100%;min-width:0;box-sizing:border-box;appearance:none;-webkit-appearance:none }
 input[type=date]::-webkit-date-and-time-value{ text-align:left }
+
+/* holding a card is a gesture, not a text selection */
+.task,.hab,.nav-item,.pop-item,.fchip,.tab,.chip,.badge,.streak,.hab-name,.t-meta,.t-title{
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+}
+/* …except the note itself, which people will want to copy out of */
+.t-desc{ -webkit-user-select:text;user-select:text }

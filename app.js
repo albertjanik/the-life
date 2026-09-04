@@ -559,10 +559,11 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 
 async function playRowExit(id, cls) {
   const row = document.querySelector(`.task[data-id="${CSS.escape(id)}"]`);
-  if (!row || reducedMotion()) return;
+  if (!row) return;
   row.style.setProperty("--row-h", `${row.offsetHeight}px`);
   row.classList.add(cls);
-  await wait(cls === "leaving" ? 620 : 500);
+  /* "reduce motion" asks for less movement, not for things to vanish unexplained */
+  await wait(reducedMotion() ? 340 : cls === "leaving" ? 620 : 500);
 }
 
 async function toggleTask(id) {
@@ -909,7 +910,8 @@ function viewOverview() {
             style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
             <div class="hab-name">
               <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
-              <div class="s">${esc(memberName(h.assignee_id))} · ${esc(habitTarget(h))}</div></div>
+              <div class="s">${esc(habitTarget(h))}</div></div>
+            <span class="who-wrap corner" title="${esc(memberName(h.assignee_id))}">${whoBadge(h.assignee_id)}</span>
             <button class="hcell today${ticked(h, off(0)) ? " on" : ""}${fx.pop === h.id + "|" + off(0) ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${off(0)}"></button>
           </div>`).join("") : `<div class="empty" style="margin:14px">${esc(t("no_habits_yet"))}</div>`}
       </div></div>
@@ -1017,7 +1019,7 @@ function viewSection(id) {
         <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop && fx.pop.startsWith(h.id + "|") ? " just-done" : ""}"
           style="--h:${rowHue(h, s)}" data-habit="${h.id}"><div class="hab-name">
           <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
-          <div class="s">${esc(memberName(h.assignee_id))} · ${esc(habitTarget(h))}</div></div>
+          <div class="s">${esc(habitTarget(h))}</div></div>
           <span class="who-wrap corner" title="${esc(memberName(h.assignee_id))}">${whoBadge(h.assignee_id)}</span>
         <div class="hgrid">${habitDays().map((d) => `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}${fx.pop === h.id + "|" + d ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}"></button>`).join("")}</div></div>`).join("")
         : `<div class="empty" style="margin:14px">${esc(t("no_habits_here"))}</div>`}
