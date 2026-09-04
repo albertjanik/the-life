@@ -245,8 +245,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 .tgroup.today .tgroup-head h3{color:var(--warn)}
 .tlist{display:flex;flex-direction:column;gap:6px}
 .task{
-  display:flex;align-items:flex-start;gap:11px;background:var(--surface);border:1px solid var(--line);
-  border-radius:10px;padding:10px 13px;position:relative;transition:border-color .12s,opacity .2s;
+  display:block;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:10px 13px;position:relative;overflow:hidden;
+  transition:border-color .12s,opacity .2s;
 }
 .task::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--cat-fg);opacity:.75}
 .task:hover{border-color:var(--line-2)}
@@ -486,8 +487,8 @@ label.check input{width:auto}
 .hab{position:relative;isolation:isolate}
 .hab.done-today::before{
   content:"";position:absolute;inset:0;z-index:-1;
-  background:linear-gradient(90deg, var(--cat-bg) 0%, transparent 78%);
-  box-shadow:inset 3px 0 0 var(--cat-fg);
+  background:linear-gradient(270deg, var(--cat-bg) 0%, transparent 82%);
+  box-shadow:inset -3px 0 0 var(--cat-fg);
 }
 .hab.done-today.just-done::before{ animation:tintIn .5s var(--ease) both }
 .hab.done-today .hab-name .n{ color:var(--cat-fg) }
@@ -635,7 +636,7 @@ button,.task,.hab,.cal-day,.nav-item,.fchip,.tab,.chip,.avatar,.who,label.check{
 
 /* ================= things arrive, they don't blink into place ================= */
 @keyframes riseIn{ from{opacity:0;transform:translateY(9px)} to{opacity:1;transform:none} }
-@keyframes tintIn{ from{opacity:0;transform:translateX(-14px)} to{opacity:1;transform:none} }
+@keyframes tintIn{ from{clip-path:inset(0 0 0 100%)} to{clip-path:inset(0 0 0 0)} }
 @keyframes fadeSlide{ from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:none} }
 
 .task,.hab,.sec-card,.stat,.note{
@@ -687,3 +688,90 @@ button,.task,.hab,.cal-day,.nav-item,.fchip,.tab,.chip,.avatar,.who,label.check{
   background:var(--accent);border-color:var(--accent);color:var(--on-accent);
 }
 #pull.busy .pull-arrow{ animation:sp .7s linear infinite }
+
+/* ================= the task card ================= */
+.t-row{ display:flex;align-items:center;gap:10px }
+.t-main{
+  flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+  text-align:left;color:inherit;padding:2px 0;border-radius:6px;
+}
+.t-main.has-more:hover .t-title{ text-decoration:underline;text-underline-offset:2px }
+.t-title{ font-weight:500;line-height:1.35 }
+.chev-mini{ color:var(--ink-3);font-size:10px;transition:transform .2s var(--ease);display:inline-block }
+.chev-mini.up{ transform:rotate(180deg) }
+.task .tick{ margin-top:0;order:4;width:23px;height:23px;border-radius:7px }
+.kebab{
+  order:3;flex:none;width:26px;height:26px;border-radius:8px;color:var(--ink-3);
+  font-size:16px;line-height:1;display:grid;place-items:center;
+  transition:background .14s,color .14s;
+}
+.kebab:hover{ background:var(--surface-2);color:var(--ink) }
+.who-wrap{ order:2 }
+.t-details{
+  margin-top:9px;padding-top:9px;border-top:1px dashed var(--line);
+  animation:unfold .26s var(--ease) both;
+}
+.t-desc{ margin:0 0 8px;font-size:13.5px;color:var(--ink-2);white-space:pre-wrap;line-height:1.5 }
+.t-details .steps{ margin:0 }
+@keyframes unfold{ from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+/* the colour of the person washes in from the tick when a task is ticked off */
+.task.leaving::after,.task.shifting::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(270deg, var(--flash, var(--accent-soft)) 0%, transparent 85%);
+  animation:tintIn .34s var(--ease) both;
+}
+.popover-task{ min-width:186px }
+
+/* ================= the burger and the drawer ================= */
+.burger{
+  flex:none;width:34px;height:34px;border-radius:9px;display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;border:1px solid var(--line);background:var(--surface);
+  transition:background .14s,border-color .14s,transform .14s var(--ease);
+}
+.burger span{ display:block;width:15px;height:1.7px;border-radius:2px;background:var(--ink-2);transition:.18s var(--ease) }
+.burger:hover{ background:var(--surface-2) }
+.burger:hover span{ background:var(--ink) }
+.burger:active{ transform:scale(.94) }
+.acct-btn{ flex:none;border-radius:50%;padding:0;transition:transform .14s var(--ease) }
+.acct-btn:hover{ transform:scale(1.06) }
+.acct-btn:active{ transform:scale(.96) }
+
+.drawer-wrap{ position:fixed;inset:0;z-index:75 }
+.drawer-scrim{
+  position:absolute;inset:0;background:rgba(10,16,13,.42);opacity:0;transition:opacity .24s var(--ease);
+}
+.drawer{
+  position:absolute;top:0;left:0;bottom:0;width:min(292px,86vw);background:var(--surface);
+  border-right:1px solid var(--line);box-shadow:0 0 44px -8px rgba(0,0,0,.35);
+  display:flex;flex-direction:column;transform:translateX(-102%);
+  transition:transform .26s var(--ease);
+}
+.drawer-wrap.in .drawer-scrim{ opacity:1 }
+.drawer-wrap.in .drawer{ transform:none }
+.drawer-head{
+  display:flex;align-items:center;gap:10px;padding:12px 12px 10px;border-bottom:1px solid var(--line);
+}
+.drawer-title{
+  font-family:"Bricolage Grotesque",sans-serif;font-weight:700;letter-spacing:-.01em;font-size:16px;
+}
+.drawer-body{ overflow:auto;padding:10px;display:flex;flex-direction:column;gap:14px;overscroll-behavior:contain }
+.drawer-body .side-head{ display:none }
+.drawer-body .nav-group{ display:flex;flex-direction:column;gap:2px }
+.drawer-body .nav-item{ animation:fadeSlide .24s var(--ease) both }
+.drawer-body .nav-item:nth-child(2){ animation-delay:26ms }
+.drawer-body .nav-item:nth-child(3){ animation-delay:52ms }
+.drawer-body .nav-item:nth-child(n+4){ animation-delay:78ms }
+body.locked{ overflow:hidden }
+
+@media (max-width:900px){
+  .burger{ display:flex }
+  .sidebar{ display:none }
+  .shell{ grid-template-columns:1fr }
+}
+@media (max-width:520px){
+  .topbar{ padding:0 12px;gap:8px }
+  .topbar h1{ font-size:16px }
+}
+/* a dialog is a fixed sheet: the page behind it neither scrolls nor zooms */
+.overlay{ touch-action:none;overscroll-behavior:contain }
+.modal{ touch-action:pan-y;overscroll-behavior:contain }

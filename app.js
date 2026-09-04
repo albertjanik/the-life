@@ -631,12 +631,18 @@ async function deleteNote(id) {
   await run(sb.from("notes").delete().eq("id", id), t("note_deleted"));
 }
 
-async function addHabit() {
-  const name = $("hb-name").value.trim();
-  if (!name) return toast(t("err_habit_name"));
-  const section_id = $("hb-sec").value;
-  const assignee_id = $("hb-who").value === "shared" ? null : $("hb-who").value;
-  await run(sb.from("habits").insert({ board_id: boardId(), section_id, name, assignee_id, target: "every day" }), t("habit_added"));
+async function addHabit(draft) {
+  const d = draft || {
+    name: $("hb-name").value,
+    section_id: $("hb-sec").value,
+    who: $("hb-who").value,
+    target: t("freq_daily")
+  };
+  if (!d.name.trim()) return toast(t("err_habit_name"));
+  await run(sb.from("habits").insert({
+    board_id: boardId(), section_id: d.section_id, name: d.name.trim(),
+    assignee_id: d.who === "shared" ? null : d.who, target: d.target || t("freq_daily")
+  }), t("habit_added"));
   await refreshAll(); renderApp();
 }
 
@@ -689,8 +695,13 @@ async function saveMemberHue(hue) {
   const m = me();
   if (m) m.hue = hue;
   renderApp();
-  await sb.from("board_members").update({ hue }).eq("board_id", boardId()).eq("user_id", state.user.id);
-  await refreshAll(); renderApp();
+  const { data, error } = await sb.from("board_members").update({ hue })
+    .eq("board_id", boardId()).eq("user_id", state.user.id).select("user_id");
+  if (error) toast(error.message);
+  else if (!data || !data.length) toast("Run supabase/schema.sql again — the board is missing the update rule.");
+  await refreshAll();
+  closeModal(); settingsModal();
+  renderApp();
 }
 
 /* Resize to a 128 px square in the browser, then keep it inline on the profile. */
@@ -720,8 +731,10 @@ async function uploadAvatar(file) {
   if (!file.type.startsWith("image/")) return toast(t("err_photo_type"));
   let dataUrl;
   try { dataUrl = await resizeToDataURL(file); } catch { return toast(t("err_photo_type")); }
-  const { error } = await sb.from("profiles").update({ avatar_url: dataUrl }).eq("id", state.user.id);
+  const { data, error } = await sb.from("profiles").update({ avatar_url: dataUrl })
+    .eq("id", state.user.id).select("id");
   if (error) return toast(error.message);
+  if (!data || !data.length) return toast("Run supabase/schema.sql again — the profile could not be written.");
   await refreshAll();
   toast(t("photo_saved"));
   closeModal(); settingsModal();
@@ -754,8 +767,10 @@ async function deleteHabit(id) {
 async function saveMemberName(name) {
   const clean = name.trim();
   if (!clean || !state.board) return;
-  await sb.from("board_members").update({ display_name: clean })
-    .eq("board_id", boardId()).eq("user_id", state.user.id);
+  const { data, error } = await sb.from("board_members").update({ display_name: clean })
+    .eq("board_id", boardId()).eq("user_id", state.user.id).select("user_id");
+  if (error) toast(error.message);
+  else if (!data || !data.length) toast("Run supabase/schema.sql again — the board is missing the update rule.");
   await refreshAll();
 }
 
@@ -777,52 +792,54 @@ function whoBadge(assignee_id) {
   return avatarHTML(memberById(assignee_id), "who");
 }
 
-function stepsBadge(task) {
-  const steps = stepsOf(task.id);
-  if (!steps.length) return "";
-  const done = steps.filter((x) => x.done).length;
-  const open = state.expanded.has(task.id);
-  return `<button class="badge steps-badge${done === steps.length ? " all-done" : ""}"
-    data-act="toggle-steps" data-id="${task.id}"
-    title="${esc(open ? t("hide_steps") : t("show_steps"))}">☑ ${esc(t("steps_done", { done, total: steps.length }))}</button>`;
-}
-
-function stepsListHTML(task) {
+function taskDetailsHTML(task) {
   if (!state.expanded.has(task.id)) return "";
   const steps = stepsOf(task.id);
-  if (!steps.length) return "";
-  return `<ul class="steps">${steps.map((x) => `
-    <li class="step${x.done ? " done" : ""}">
-      <button class="step-tick" data-act="toggle-step" data-id="${x.id}" aria-label="${esc(x.title)}">
-        <svg viewBox="0 0 12 12" fill="none" stroke="${x.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
-      </button><span>${esc(x.title)}</span></li>`).join("")}</ul>`;
+  if (!task.description && !steps.length) return "";
+  return `<div class="t-details">
+    ${task.description ? `<p class="t-desc">${esc(task.description)}</p>` : ""}
+    ${steps.length ? `<ul class="steps">${steps.map((x) => `
+      <li class="step${x.done ? " done" : ""}">
+        <button class="step-tick" data-act="toggle-step" data-id="${x.id}" aria-label="${esc(x.title)}">
+          <svg viewBox="0 0 12 12" fill="none" stroke="${x.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
+        </button><span>${esc(x.title)}</span></li>`).join("")}</ul>` : ""}
+  </div>`;
 }
 
 function taskHTML(task, i = 0) {
   const s = secById(task.section_id), n = diff(task.due_date);
   const cls = n < 0 ? "od" : n === 0 ? "td" : "";
   const p = task.assignee_id ? memberHue(task.assignee_id) : s.hue;
-  return `<div class="task${task.done ? " done" : ""}${task.assignee_id ? " mine" : ""}"
+  const steps = stepsOf(task.id);
+  const hasMore = !!task.description || steps.length > 0;
+  const open = state.expanded.has(task.id);
+  const doneSteps = steps.filter((x) => x.done).length;
+  return `<div class="task${task.done ? " done" : ""}${task.assignee_id ? " mine" : ""}${open ? " open" : ""}"
     style="--h:${s.hue};--p:${p};--i:${Math.min(i, 12)}" data-id="${task.id}">
-    <button class="tick" data-act="toggle" data-id="${task.id}" aria-label="${esc(t("today"))}">
-      <svg viewBox="0 0 12 12" fill="none" stroke="${task.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
-    </button>
-    <div class="t-main">
-      <button class="t-title t-open" data-act="edit-task" data-id="${task.id}" title="${esc(t("edit_task"))}">${esc(task.title)}</button>
-      <div class="t-meta">
-        <button class="sec sec-link" data-act="go" data-view="section" data-sec="${task.section_id}" title="${esc(t("open_section"))}">${esc(sectionName(s))}</button><span>·</span>
-        <span class="t-date ${cls}">${human(task.due_date)}</span>
-        ${task.recurrence ? `<span class="badge rec">↻ ${esc(recLabel(task.recurrence))}${task.recur_from_completion ? " · " + esc(t("badge_from_done")) : ""}</span>` : ""}
-        ${task.important ? `<span class="badge pri">${esc(t("important"))}</span>` : ""}
-        ${task.description ? `<span class="badge" title="${esc(task.description)}">≡</span>` : ""}
-        ${stepsBadge(task)}
-      </div>
-      ${stepsListHTML(task)}
+    <div class="t-row">
+      <button class="t-main${hasMore ? " has-more" : ""}" ${hasMore
+        ? `data-act="toggle-steps" data-id="${task.id}" title="${esc(open ? t("hide_details") : t("show_details"))}"`
+        : `data-act="edit-task" data-id="${task.id}" title="${esc(t("edit_task"))}"`}>
+        <span class="t-title">${esc(task.title)}</span>
+        <span class="t-meta">
+          <span class="sec">${esc(sectionName(s))}</span><span>·</span>
+          <span class="t-date ${cls}">${human(task.due_date)}</span>
+          ${task.recurrence ? `<span class="badge rec">↻ ${esc(recLabel(task.recurrence))}${task.recur_from_completion ? " · " + esc(t("badge_from_done")) : ""}</span>` : ""}
+          ${task.important ? `<span class="badge pri">${esc(t("important"))}</span>` : ""}
+          ${task.description ? `<span class="badge">≡</span>` : ""}
+          ${steps.length ? `<span class="badge steps-badge${doneSteps === steps.length ? " all-done" : ""}">☑ ${esc(t("steps_done", { done: doneSteps, total: steps.length }))}</span>` : ""}
+          ${hasMore ? `<span class="chev-mini${open ? " up" : ""}">▾</span>` : ""}
+        </span>
+      </button>
+      <span class="who-wrap" title="${esc(memberName(task.assignee_id))}">
+        ${whoBadge(task.assignee_id)}<span class="who-name">${esc(memberName(task.assignee_id))}</span>
+      </span>
+      <button class="kebab" data-act="task-menu" data-id="${task.id}" aria-label="${esc(t("more_actions"))}">⋮</button>
+      <button class="tick" data-act="toggle" data-id="${task.id}" aria-label="${esc(t("task_closed"))}">
+        <svg viewBox="0 0 12 12" fill="none" stroke="${task.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
+      </button>
     </div>
-    <span class="who-wrap" title="${esc(memberName(task.assignee_id))}">
-      ${whoBadge(task.assignee_id)}<span class="who-name">${esc(memberName(task.assignee_id))}</span>
-    </span>
-    <button class="del" data-act="del-task" data-id="${task.id}" aria-label="${esc(t("delete"))}">×</button>
+    ${taskDetailsHTML(task)}
   </div>`;
 }
 
@@ -874,7 +891,8 @@ function viewOverview() {
   const od = act.filter((x) => diff(x.due_date) < 0);
   const td = act.filter((x) => diff(x.due_date) === 0);
   const wk = act.filter((x) => { const n = diff(x.due_date); return n > 0 && n <= 7; });
-  const habToday = state.habits.filter((h) => ticked(h, off(0))).length;
+  const habitsShown = state.habits.filter((h) => whoOk(h));
+  const habToday = habitsShown.filter((h) => ticked(h, off(0))).length;
   const next = [...act].sort((a, b) => (a.due_date < b.due_date ? -1 : 1)).slice(0, 6);
   const d = new Date();
   const dateLine = lang === "pl"
@@ -888,14 +906,14 @@ function viewOverview() {
       <div class="stat${od.length ? " crit" : ""}"><div class="k">${esc(t("stat_overdue"))}</div><div class="v tnum">${od.length}</div><div class="s">${esc(od.length ? t("stat_overdue_yes") : t("stat_overdue_no"))}</div></div>
       <div class="stat warn"><div class="k">${esc(t("stat_today"))}</div><div class="v tnum">${td.length}</div><div class="s">${esc(t("stat_today_sub", { n: countLabel(td.length, "task_one", "task_many") }))}</div></div>
       <div class="stat"><div class="k">${esc(t("stat_week"))}</div><div class="v tnum">${wk.length}</div><div class="s">${esc(t("stat_week_sub"))}</div></div>
-      <div class="stat"><div class="k">${esc(t("stat_habits"))}</div><div class="v tnum">${habToday}/${state.habits.length}</div><div class="s">${esc(t("stat_habits_sub"))}</div></div>
+      <div class="stat"><div class="k">${esc(t("stat_habits"))}</div><div class="v tnum">${habToday}/${habitsShown.length}</div><div class="s">${esc(t("stat_habits_sub"))}</div></div>
     </div>
     <div class="ov-grid" style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;margin-top:16px">
       <div class="card"><div class="card-head"><h2>${esc(t("coming_up"))}</h2><div class="spacer"></div>
         <button class="btn btn-ghost btn-sm" data-act="go" data-view="upcoming">${esc(t("full_list"))}</button></div>
         <div class="card-body"><div class="tlist">${next.length ? next.map((x, i) => taskHTML(x, i)).join("") : `<div class="empty">${esc(t("nothing_waiting"))}</div>`}</div></div></div>
       <div class="card"><div class="card-head"><h2>${esc(t("habits_today"))}</h2></div><div>
-        ${state.habits.length ? state.habits.map((h, i) => `
+        ${habitsShown.length ? habitsShown.map((h, i) => `
           <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop === h.id + "|" + off(0) ? " just-done" : ""}"
             style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}">
             <div class="hab-name">
@@ -1033,31 +1051,6 @@ function viewSection(id) {
 
 /* ------------------------------------------------------------- app shell */
 
-function currentViewLabel() {
-  if (state.view.type === "section") {
-    const sec = secById(state.view.sec);
-    return { name: sectionName(sec), code: sectionCode(sec), hue: sec.hue };
-  }
-  const map = {
-    overview: { name: t("overview"), code: "OV", hue: 163 },
-    upcoming: { name: t("upcoming"), code: "UP", hue: 38 },
-    calendar: { name: t("calendar"), code: "CA", hue: 210 },
-    habits: { name: t("habits"), code: "HA", hue: 295 }
-  };
-  return map[state.view.type] || map.overview;
-}
-
-function accountButtonHTML() {
-  return `<button class="account" data-act="account-menu" aria-haspopup="menu">
-      ${avatarHTML(me(), "avatar av-lg")}
-      <span class="account-text">
-        <span class="nm">${esc(me()?.display_name || displayName())}</span>
-        <span class="sub">${esc(t("account"))}</span>
-      </span>
-      <svg class="chev" viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5 6 4l3.5 3.5"/></svg>
-    </button>`;
-}
-
 function renderApp() {
   if (!state.board) return;
   const MAIN = [
@@ -1066,7 +1059,10 @@ function renderApp() {
     { k: "calendar", n: t("calendar"), code: "CA", h: 210 },
     { k: "habits", n: t("habits"), code: "HA", h: 295 }
   ];
-  const counts = { overview: "", upcoming: openTasks().length, calendar: "", habits: state.habits.length };
+  const counts = {
+    overview: "", upcoming: openTasks().length, calendar: "",
+    habits: state.habits.filter((h) => whoOk(h)).length
+  };
   let title = t("overview"), content = "";
   if (state.view.type === "overview") content = viewOverview();
   else if (state.view.type === "upcoming") { title = t("upcoming"); content = viewUpcoming(); }
@@ -1074,25 +1070,14 @@ function renderApp() {
   else if (state.view.type === "habits") { title = t("habits"); content = viewHabits(); }
   else { title = sectionName(secById(state.view.sec)); content = viewSection(state.view.sec); }
 
-  const cur = currentViewLabel();
   root.className = "shell";
   root.innerHTML = `
     <aside class="sidebar">
-      <div class="mobile-bar">
-        <button class="brand-mark brand-btn${state.view.type === "overview" ? " active" : ""}" data-act="go" data-view="overview" title="${esc(t("go_overview"))}">TL</button>
-        <button class="navdrop" data-act="nav-menu" aria-haspopup="menu" style="--h:${cur.hue}">
-          <span class="chip">${esc(cur.code)}</span>
-          <span class="navdrop-name">${esc(cur.name)}</span>
-          <svg class="chev" viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>
-        </button>
-        <div class="spacer"></div>
-        ${accountButtonHTML()}
-      </div>
-      <button class="side-head${state.view.type === "overview" ? " active" : ""}" data-act="go" data-view="overview" title="${esc(t("go_overview"))}">
-        <span class="brand-mark">TL</span>
+      <div class="side-head">
+        <span class="brand-mark" aria-hidden="true">TL</span>
         <span><span class="side-panel-name">${esc(state.board.name)}</span>
         <span class="side-panel-sub">${esc(state.board.invite_code)}</span></span>
-      </button>
+      </div>
       <div class="nav-group">${MAIN.map((m) => `
         <button class="nav-item${state.view.type === m.k ? " active" : ""}" style="--h:${m.h}" data-act="go" data-view="${m.k}">
           <span class="chip">${m.code}</span>${esc(m.n)}<span class="nav-count">${counts[m.k]}</span></button>`).join("")}
@@ -1106,19 +1091,20 @@ function renderApp() {
         }).join("")}
         <button class="nav-item" style="--h:163" data-act="new-section"><span class="chip">+</span>${esc(t("new_section"))}</button>
       </div>
-      <div class="nav-group side-account" style="margin-top:auto">
-        ${accountButtonHTML()}
-      </div>
+
     </aside>
     <div class="main">
       <header class="topbar">
+        <button class="burger" data-act="drawer" aria-label="${esc(t("open_menu"))}">
+          <span></span><span></span><span></span>
+        </button>
         <h1>${esc(title)}</h1>
         <div class="spacer"></div>
         ${state.live ? "" : `<span class="offline-chip" title="${esc(t("offline_note"))}"><span class="led"></span>${esc(t("offline"))}</span>`}
-        <div class="members" title="${esc(state.members.map((m) => m.display_name).join(" · "))}">
-          ${state.members.map((m) => avatarHTML(m)).join("")}
-        </div>
-        <button class="btn btn-primary btn-sm" data-act="new-task">${esc(t("new_task"))}</button>
+        <button class="btn btn-primary btn-sm" data-act="add-something">${esc(t("add_short"))}</button>
+        <button class="acct-btn" data-act="account-menu" aria-haspopup="menu" title="${esc(me()?.display_name || displayName())}">
+          ${avatarHTML(me(), "avatar av-lg")}
+        </button>
       </header>
       <div class="content">${content}</div>
     </div>`;
@@ -1126,7 +1112,14 @@ function renderApp() {
 
 /* ------------------------------------------------------------- modals */
 
-const closeModal = () => { $("modal-root").innerHTML = ""; };
+const closeModal = () => {
+  $("modal-root").innerHTML = "";
+  if (!$("drawer")) document.body.classList.remove("locked");
+};
+const openModal = (node) => {
+  $("modal-root").appendChild(node);
+  document.body.classList.add("locked");
+};
 
 function stepEditorHTML(task) {
   const steps = task ? stepsOf(task.id) : pendingSteps.map((title, i) => ({ id: "p" + i, title, done: false, pending: true }));
@@ -1199,9 +1192,48 @@ function readTaskForm() {
   };
 }
 
+function addMenuModal() {
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true" style="width:min(430px,100%)">
+    <div class="modal-head"><h2>${esc(t("add_something"))}</h2><div class="spacer"></div>
+      <button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body">
+      <button class="pick-card pick-inline" data-act="pick-task">
+        <span class="chip chip-lg" style="--h:38">TA</span>
+        <span><span class="nm">${esc(t("a_task"))}</span><span class="ln">${esc(t("a_task_desc"))}</span></span>
+      </button>
+      <button class="pick-card pick-inline" data-act="pick-habit">
+        <span class="chip chip-lg" style="--h:295">HA</span>
+        <span><span class="nm">${esc(t("a_habit"))}</span><span class="ln">${esc(t("a_habit_desc"))}</span></span>
+      </button>
+    </div>
+  </div></div>`));
+}
+
+const FREQS = ["freq_daily", "freq_5w", "freq_3w", "freq_weekly", "freq_weekend"];
+
+function newHabitModal() {
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>${esc(t("new_habit"))}</h2><div class="spacer"></div>
+      <button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body">
+      <div class="field"><label for="nh-name">${esc(t("habit_name"))}</label>
+        <input id="nh-name" type="text" placeholder="${esc(t("new_habit_placeholder"))}"></div>
+      <div class="grid2">
+        <div class="field"><label for="nh-sec">${esc(t("section"))}</label><select id="nh-sec">${sectionOptions(state.view.sec)}</select></div>
+        <div class="field"><label for="nh-who">${esc(t("who"))}</label><select id="nh-who">${assigneeOptions(state.user.id)}</select></div>
+      </div>
+      <div class="field"><label for="nh-freq">${esc(t("how_often"))}</label>
+        <select id="nh-freq">${FREQS.map((f) => `<option value="${esc(t(f))}">${esc(t(f))}</option>`).join("")}</select></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
+      <button class="btn btn-primary" data-act="save-habit">${esc(t("add_habit"))}</button></div>
+  </div></div>`));
+  $("nh-name").focus();
+}
+
 function newTaskModal() {
   pendingSteps = [];
-  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("new_task"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">${taskFormHTML(null)}</div>
     <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
@@ -1213,7 +1245,7 @@ function newTaskModal() {
 function editTaskModal(id) {
   const task = taskById(id);
   if (!task) return;
-  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("edit_task"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">${taskFormHTML(task)}</div>
     <div class="modal-foot">
@@ -1229,7 +1261,7 @@ function editTaskModal(id) {
 
 function shareModal() {
   const owner = me()?.role === "owner";
-  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("share_title"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">
       <div><label>${esc(t("invite_code"))}</label><div class="code">${esc(state.board.invite_code)}</div>
@@ -1254,7 +1286,7 @@ function deleteSectionModal(id) {
   const notes = state.notes.filter((x) => x.section_id === id).length;
   const habits = state.habits.filter((x) => x.section_id === id).length;
   const empty = tasks + notes + habits === 0;
-  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true" style="width:min(430px,100%)">
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true" style="width:min(430px,100%)">
     <div class="modal-head"><h2>${esc(t("delete_section_q", { name: sectionName(sec) }))}</h2>
       <div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body"><p style="margin:0;color:var(--ink-2)">${esc(empty
@@ -1270,7 +1302,7 @@ function deleteSectionModal(id) {
 }
 
 function newSectionModal() {
-  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("new_section"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body"><div class="field"><label for="s-name">${esc(t("section_name"))}</label>
       <input id="s-name" type="text" placeholder="${esc(t("section_placeholder"))}"></div></div>
@@ -1283,7 +1315,7 @@ function newSectionModal() {
 function editHabitModal(id) {
   const h = state.habits.find((x) => x.id === id);
   if (!h) return;
-  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("edit_habit"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">
       <div class="field"><label for="h-name">${esc(t("habit_name"))}</label>
@@ -1305,35 +1337,48 @@ function editHabitModal(id) {
   $("h-name").focus();
 }
 
-/* The section picker on narrow screens. */
-function navMenu(anchor) {
+/* The whole navigation, slid in from the left on narrow screens. */
+function openDrawer() {
+  if ($("drawer")) return;
+  const nav = document.querySelector(".sidebar")?.innerHTML || "";
+  const wrap = el(`<div id="drawer" class="drawer-wrap">
+    <div class="drawer-scrim" data-act="close-drawer"></div>
+    <aside class="drawer">
+      <div class="drawer-head">
+        <span class="brand-mark" aria-hidden="true">TL</span>
+        <span class="drawer-title">${esc(t("menu"))}</span>
+        <div class="spacer"></div>
+        <button class="del" style="opacity:1" data-act="close-drawer" aria-label="${esc(t("close"))}">×</button>
+      </div>
+      <div class="drawer-body">${nav}</div>
+    </aside>
+  </div>`);
+  document.body.appendChild(wrap);
+  document.body.classList.add("locked");
+  requestAnimationFrame(() => wrap.classList.add("in"));
+}
+
+function closeDrawer() {
+  const wrap = $("drawer");
+  if (!wrap) return;
+  wrap.classList.remove("in");
+  document.body.classList.remove("locked");
+  setTimeout(() => wrap.remove(), 240);
+}
+
+/* Edit or delete, from the ⋮ on a task. */
+function taskMenu(anchor, id) {
+  const open = document.querySelector("#menu-root .popover");
   closeMenu();
-  const MAIN = [
-    { k: "overview", n: t("overview"), code: "OV", h: 163 },
-    { k: "upcoming", n: t("upcoming"), code: "UP", h: 38 },
-    { k: "calendar", n: t("calendar"), code: "CA", h: 210 },
-    { k: "habits", n: t("habits"), code: "HA", h: 295 }
-  ];
-  const item = (view, sec, code, name, hue, count, active) =>
-    `<button class="pop-item nav-pop${active ? " active" : ""}" style="--h:${hue}" data-act="go-close" data-view="${view}"${sec ? ` data-sec="${sec}"` : ""}>
-      <span class="chip">${esc(code)}</span><span class="nav-pop-name">${esc(name)}</span>
-      <span class="nav-count">${count || ""}</span></button>`;
-  const menu = el(`<div class="popover popover-nav" role="menu">
-    ${MAIN.map((m) => item(m.k, null, m.code, m.n, m.h,
-        m.k === "upcoming" ? openTasks().length : m.k === "habits" ? state.habits.length : "",
-        state.view.type === m.k)).join("")}
-    <div class="pop-sep"></div>
-    <div class="pop-label">${esc(t("life_sections"))}</div>
-    ${state.sections.map((sec) => item("section", sec.id, sectionCode(sec), sectionName(sec), sec.hue,
-        state.tasks.filter((x) => x.section_id === sec.id && !x.done).length,
-        state.view.type === "section" && state.view.sec === sec.id)).join("")}
-    <div class="pop-sep"></div>
-    <button class="pop-item" data-act="new-section"><span class="pop-ico">+</span>${esc(t("new_section"))}</button>
+  if (open && open.dataset.task === id) return;
+  const menu = el(`<div class="popover popover-task" role="menu" data-task="${id}">
+    <button class="pop-item" data-act="edit-task" data-id="${id}"><span class="pop-ico">✎</span>${esc(t("edit_task"))}</button>
+    <button class="pop-item danger" data-act="del-task" data-id="${id}"><span class="pop-ico">✕</span>${esc(t("delete"))}</button>
   </div>`);
   placePopover(menu, anchor);
 }
 
-/* Small menu anchored to the account button in the sidebar. */
+/* Small menu anchored to the account button. */
 function accountMenu(anchor) {
   closeMenu();
   const menu = el(`<div class="popover" role="menu">
@@ -1391,7 +1436,7 @@ window.addEventListener("scroll", (e) => {
 
 function settingsModal() {
   const themes = [["system", t("theme_system")], ["light", t("theme_light")], ["dark", t("theme_dark")]];
-  $("modal-root").appendChild(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("settings_title"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">
       <div class="row" style="gap:14px;align-items:flex-start">
@@ -1479,6 +1524,20 @@ document.addEventListener("click", async (e) => {
       return;
     }
 
+    /* menu and adding */
+    case "drawer": return openDrawer();
+    case "close-drawer": return closeDrawer();
+    case "add-something": return addMenuModal();
+    case "pick-task": closeModal(); return newTaskModal();
+    case "pick-habit": closeModal(); return newHabitModal();
+    case "save-habit": {
+      const draft = { name: $("nh-name").value, section_id: $("nh-sec").value, who: $("nh-who").value, target: $("nh-freq").value };
+      if (!draft.name.trim()) return toast(t("err_habit_name"));
+      closeModal();
+      return addHabit(draft);
+    }
+    case "task-menu": return taskMenu(b, b.dataset.id);
+
     /* account */
     case "account-menu": {
       const open = document.querySelector("#menu-root .popover");
@@ -1523,6 +1582,7 @@ document.addEventListener("click", async (e) => {
       window.scrollTo({ top: 0 });
       return renderApp();
     case "go":
+      closeDrawer();
       state.view = b.dataset.view === "section" ? { type: "section", sec: b.dataset.sec } : { type: b.dataset.view };
       if (b.dataset.view === "section") state.tab = "tasks";
       window.scrollTo({ top: 0 });
@@ -1545,9 +1605,9 @@ document.addEventListener("click", async (e) => {
 
     /* tasks */
     case "toggle": return toggleTask(b.dataset.id);
-    case "del-task": return deleteTask(b.dataset.id);
+    case "del-task": closeMenu(); return deleteTask(b.dataset.id);
     case "del-task-modal": closeModal(); return deleteTask(b.dataset.id);
-    case "edit-task": return editTaskModal(b.dataset.id);
+    case "edit-task": closeMenu(); return editTaskModal(b.dataset.id);
     case "new-task": return newTaskModal();
     case "save-task": {
       const draft = readTaskForm();
@@ -1582,11 +1642,6 @@ document.addEventListener("click", async (e) => {
       pendingSteps.splice(+b.dataset.id, 1);
       return refreshStepEditor();
     }
-    case "nav-menu": {
-      const open = document.querySelector("#menu-root .popover");
-      if (open) return closeMenu();
-      return navMenu(b);
-    }
     case "qa": {
       const who = $("qa-who").value;
       return addTask({
@@ -1615,7 +1670,7 @@ document.addEventListener("click", async (e) => {
     }
     case "del-habit": closeModal(); return deleteHabit(b.dataset.id);
     case "habit": return toggleHabitDay(b.dataset.id, b.dataset.day);
-    case "new-section": closeMenu(); return newSectionModal();
+    case "new-section": closeMenu(); closeDrawer(); return newSectionModal();
     case "del-section": return deleteSectionModal(b.dataset.id);
     case "confirm-del-section": return deleteSection(b.dataset.id);
     case "save-section": {
@@ -1651,7 +1706,7 @@ document.addEventListener("change", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeModal(); closeMenu(); }
+  if (e.key === "Escape") { closeModal(); closeMenu(); closeDrawer(); }
   if (e.key !== "Enter") return;
   const id = e.target.id;
   const click = (sel) => document.querySelector(sel)?.click();
@@ -1731,15 +1786,24 @@ sb.auth.onAuthStateChange(async (event, session) => {
   const setPull = (d) => {
     dist = d;
     root.style.transform = d ? `translateY(${d.toFixed(1)}px)` : "";
-    bar.style.opacity = Math.min(1, d / THRESHOLD);
+    bar.style.opacity = Math.max(0, Math.min(1, d / THRESHOLD));
     bar.style.transform = `translate(-50%, ${(Math.min(d, MAX) * 0.62).toFixed(1)}px) scale(${(0.72 + Math.min(d, MAX) / MAX * 0.28).toFixed(2)})`;
     bar.classList.toggle("ready", d >= THRESHOLD);
   };
 
+  const atBottom = () => {
+    const el = scroller();
+    return el.scrollHeight - el.scrollTop - window.innerHeight <= 1;
+  };
+  let mode = null;                            // "top" or "bottom"
+
   document.addEventListener("touchstart", (e) => {
     if (busy || e.touches.length !== 1 || !state.board) return;
-    if (scroller().scrollTop > 0) return;
-    if (e.target.closest?.(".popover, .modal, .cal, .hgrid, input, textarea, select")) return;
+    if (document.body.classList.contains("locked")) return;
+    if (e.target.closest?.(".popover, .modal, .drawer, .cal, .hgrid, input, textarea, select")) return;
+    const top = scroller().scrollTop <= 0, bottom = atBottom();
+    if (!top && !bottom) return;
+    mode = top ? "top" : "bottom";
     startY = e.touches[0].clientY;
     pulling = true;
     spring(false);
@@ -1748,16 +1812,24 @@ sb.auth.onAuthStateChange(async (event, session) => {
   document.addEventListener("touchmove", (e) => {
     if (!pulling || busy || e.touches.length !== 1) return;
     const dy = e.touches[0].clientY - startY;
-    if (dy <= 0) { if (dist) setPull(0); return; }
-    if (scroller().scrollTop > 0) { pulling = false; setPull(0); return; }
-    e.preventDefault();                       // the page stays; the rubber band is ours
-    setPull(Math.min(MAX, dy * DAMPING));
+    if (mode === "top") {
+      if (dy <= 0) { if (dist) setPull(0); mode = scroller().scrollTop <= 0 ? mode : null; return; }
+      if (scroller().scrollTop > 0) { pulling = false; setPull(0); return; }
+      e.preventDefault();                     // the page stays; the rubber band is ours
+      setPull(Math.min(MAX, dy * DAMPING));
+    } else {
+      if (dy >= 0) { if (dist) setPull(0); return; }
+      if (!atBottom()) { pulling = false; setPull(0); return; }
+      e.preventDefault();
+      setPull(Math.max(-MAX * 0.6, dy * DAMPING * 0.7));   // the end of a list gives less
+    }
   }, { passive: false });
 
   document.addEventListener("touchend", async () => {
     if (!pulling || busy) return;
     pulling = false;
-    const go = dist >= THRESHOLD;
+    const go = mode === "top" && dist >= THRESHOLD;
+    mode = null;
     spring(true);
     if (go) {
       busy = true;

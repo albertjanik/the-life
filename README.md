@@ -30,9 +30,10 @@ free project. Any region near you is fine; keep the database password somewhere 
 contents of [`supabase/schema.sql`](supabase/schema.sql) and press **Run**. It creates the
 tables, the access rules and the `create_board` / `join_board` functions.
 
-The file is written to be run again at any time: when a change here adds a column, re-running
-it is the whole migration. (Run it again if your project predates the `recur_from_completion`
-or `description` columns on `tasks`, `avatar_url` on `profiles`, or the `subtasks` table.)
+The file is written to be run again at any time: when a change here adds a column or a rule,
+re-running it is the whole migration. **Run it again now if your project is older than the
+`members_update` policy** — without it your colour and your name on the board look saved and
+come back on the next read.
 
 **3. Turn off email confirmation** (optional, but easier for two people).
 **Authentication → Sign In / Providers → Email** → switch **Confirm email** off. With it on,
@@ -72,7 +73,7 @@ GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow
 | Calendar | Month view; the colour bar is the section, a red outline means the date has passed |
 | Habits | 14-day grid, click any day (past days included), streaks; a habit ticked off today lights up in its owner's colour and says whose it is. Click a habit's name to rename it, move it, change how often or delete it |
 | Section | Tasks, notes, habits and history for that part of life |
-| Account | One button at the bottom of the sidebar: your picture and name, then settings, sharing, switching boards and signing out |
+| Account | Your picture in the top-right corner: settings, sharing, switching boards and signing out |
 | Sharing | Invite code (the owner can roll it), who is on the board, and their roles |
 | Settings | Profile picture, your colour, interface language (English / Polski), theme, your name on the board, password |
 
@@ -82,11 +83,8 @@ Learning · Dreams · Travel · Household · Car · Finances ·
 Health & Fitness · Work & Career · Family & Friends · Shopping & Pantry · Documents & Renewals
 
 Sections are data, not code — rename them in the `sections` table, or add your own with
-**New section** in the sidebar. **Delete section** on a section's page removes it together
+**New section** in the navigation. **Delete section** on a section's page removes it together
 with everything inside it, after a dialog that counts what will go.
-
-The board name in the top-left corner is a button: it takes you back to the overview from
-anywhere.
 
 ### Repeating tasks
 
@@ -102,14 +100,18 @@ Each repeating task also carries a switch, **off by default**:
 
 ### Editing, notes and checklists
 
-Click a task's title — anywhere it appears, the calendar included — to edit it: title,
-section, date, repeat rule, who it belongs to, whether it's important. Clicking the section
-name on a task jumps straight to that section.
+A task is edited from `⋮` (or by tapping one that carries nothing to unfold, and from the
+calendar): title, section, date, repeat rule, who it belongs to, whether it's important.
+Clicking the section name on a task jumps straight to that section.
 
 A task can also carry **notes** (account numbers, an address, what was agreed) and a
-**checklist**. The list shows up on the task as a `☑ 2/5` badge; click it and the steps
-unfold under the task, tickable one by one, without opening anything. The badge turns green
-when the last step is done.
+**checklist**. Tapping a task that has either unfolds them in place — the note, then the
+steps, tickable one by one. `⋮` on the right opens **Edit task** and **Delete**, and the
+tick sits at the far right, in the same place as a habit's, so both are closed with the same
+gesture.
+
+**+ Add** first asks what you are adding, a task or a habit, then opens the right form; a
+habit is a name, a section, a person and how often.
 
 <p align="center">
   <img src="docs/checklist.png" width="62%" alt="A task with its checklist open">
@@ -117,9 +119,9 @@ when the last step is done.
 
 ### On a phone
 
-Below 900 px the sidebar folds into a single bar: the section you are in becomes a dropdown
-that opens every view and every section, and your account sits on the right. Nothing scrolls
-sideways.
+Below 900 px the sidebar becomes a drawer: three lines in the top-left corner slide the whole
+navigation in from the left, headed by **Menu**. The top bar carries the view's name, then
+**+ Add** and your picture. Nothing scrolls sideways.
 
 <p align="center">
   <img src="docs/mobile.png" width="34%" alt="The section dropdown on a phone">

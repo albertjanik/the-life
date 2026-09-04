@@ -188,12 +188,17 @@ create policy boards_update on public.boards for update
 create policy boards_delete on public.boards for delete
   using (created_by = auth.uid());
 
-drop policy if exists members_read  on public.board_members;
-drop policy if exists members_leave on public.board_members;
+drop policy if exists members_read   on public.board_members;
+drop policy if exists members_leave  on public.board_members;
+drop policy if exists members_update on public.board_members;
 create policy members_read on public.board_members for select
   using (public.is_board_member(board_id));
 create policy members_leave on public.board_members for delete
   using (user_id = auth.uid());
+-- Your own row: your name on the board and your colour. (Without this the
+-- update silently touched zero rows and the change came back on the next read.)
+create policy members_update on public.board_members for update
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Everything inside a board: any member may read and write.
 do $$
