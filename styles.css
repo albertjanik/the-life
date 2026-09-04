@@ -457,7 +457,7 @@ label.check input{width:auto}
 @keyframes fadeUp{ from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
 @keyframes popIn{ 0%{opacity:0;transform:scale(.94)} 100%{opacity:1;transform:none} }
 @keyframes overlayIn{ from{opacity:0} to{opacity:1} }
-@keyframes cellPop{ 0%{transform:scale(.55)} 60%{transform:scale(1.18)} 100%{transform:scale(1)} }
+@keyframes cellPop{ 0%{transform:scale(.86);opacity:.65} 55%{transform:scale(1.06)} 100%{transform:scale(1);opacity:1} }
 @keyframes drawTick{ from{stroke-dashoffset:16} to{stroke-dashoffset:0} }
 @keyframes rowLeave{
   0%   {opacity:1;transform:none;max-height:var(--row-h,80px)}
@@ -473,7 +473,7 @@ label.check input{width:auto}
 }
 @keyframes ledPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
 
-.content{ animation:fadeUp .2s var(--ease) both }
+.content.enter{ animation:fadeUp .2s var(--ease) both }
 .overlay{ animation:overlayIn .16s ease both }
 .modal{ animation:popIn .2s var(--ease) both }
 .stat,.sec-card,.card{ transition:transform .16s var(--ease), border-color .16s, box-shadow .16s }
@@ -490,7 +490,7 @@ label.check input{width:auto}
 .tick:hover{ transform:scale(1.12) }
 .hcell{ transition:background .18s var(--ease), border-color .18s, transform .14s var(--ease) }
 .hcell:hover{ transform:scale(1.14) }
-.hcell.pop{ animation:cellPop .34s var(--ease) }
+.hcell.pop{ animation:cellPop .3s var(--ease) }
 .nav-item,.fchip,.btn,.tab{ transition:background .14s, color .14s, border-color .14s, transform .14s var(--ease) }
 .btn:active,.fchip:active,.nav-item:active{ transform:scale(.97) }
 .note{ transition:transform .16s var(--ease), border-color .16s }
@@ -653,11 +653,13 @@ button,.task,.hab,.cal-day,.nav-item,.fchip,.tab,.chip,.avatar,.who,label.check{
 @keyframes tintIn{ from{clip-path:inset(0 0 0 100%)} to{clip-path:inset(0 0 0 0)} }
 @keyframes fadeSlide{ from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:none} }
 
-.task,.hab,.sec-card,.stat,.note{
+.content.enter .task,.content.enter .hab,.content.enter .sec-card,
+.content.enter .stat,.content.enter .note{
   animation:riseIn .3s var(--ease) both;
   animation-delay:calc(var(--i, 0) * 22ms);
 }
-.tgroup-head,.steps .step{ animation:fadeSlide .26s var(--ease) both }
+.content.enter .tgroup-head{ animation:fadeSlide .26s var(--ease) both }
+.steps .step{ animation:fadeSlide .26s var(--ease) both }
 .steps .step:nth-child(2){ animation-delay:40ms }
 .steps .step:nth-child(3){ animation-delay:80ms }
 .steps .step:nth-child(n+4){ animation-delay:120ms }
@@ -834,3 +836,4 @@ input[type=date]::-webkit-date-and-time-value{ text-align:left }
 }
 /* …except the note itself, which people will want to copy out of */
 .t-desc{ -webkit-user-select:text;user-select:text }
+.t-main.quiet{ cursor:default }

@@ -206,6 +206,10 @@ const state = {
   recovery: false
 };
 
+/* Lists animate in when you arrive somewhere new. Ticking something off is a
+   redraw of the same view, and everything jumping again reads as a shudder. */
+let lastViewKey = "";
+
 /* one-shot animation markers, cleared shortly after they play */
 let fx = { pop: null };
 let fxTimer = null;
@@ -812,9 +816,10 @@ function taskHTML(task, i = 0) {
   return `<div class="task${task.done ? " done" : ""}${task.assignee_id ? " mine" : ""}${open ? " open" : ""}"
     style="--h:${s.hue};--p:${p};--i:${Math.min(i, 12)}" data-id="${task.id}">
     <div class="t-row">
-      <button class="t-main${hasMore ? " has-more" : ""}" ${hasMore
-        ? `data-act="toggle-steps" data-id="${task.id}" title="${esc(open ? t("hide_details") : t("show_details"))}"`
-        : `data-act="edit-task" data-id="${task.id}" title="${esc(t("edit_task"))}"`}>
+      ${hasMore
+        ? `<button class="t-main has-more" data-act="toggle-steps" data-id="${task.id}"
+             title="${esc(open ? t("hide_details") : t("show_details"))}">`
+        : `<div class="t-main quiet">`}
         <span class="t-title">${esc(task.title)}</span>
         <span class="t-meta">
           <span class="sec">${esc(sectionName(s))}</span><span>·</span>
@@ -825,7 +830,7 @@ function taskHTML(task, i = 0) {
           ${steps.length ? `<span class="badge steps-badge${doneSteps === steps.length ? " all-done" : ""}">☑ ${esc(t("steps_done", { done: doneSteps, total: steps.length }))}</span>` : ""}
           ${hasMore ? `<span class="chev-mini${open ? " up" : ""}">▾</span>` : ""}
         </span>
-      </button>
+      ${hasMore ? "</button>" : "</div>"}
       <span class="who-wrap corner" title="${esc(memberName(task.assignee_id))}">${whoBadge(task.assignee_id)}</span>
       <button class="tick" data-act="toggle" data-id="${task.id}" aria-label="${esc(t("task_closed"))}">
         <svg viewBox="0 0 12 12" fill="none" stroke="${task.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
@@ -1057,6 +1062,10 @@ function renderApp() {
   else if (state.view.type === "habits") { title = t("habits"); content = viewHabits(); }
   else { title = sectionName(secById(state.view.sec)); content = viewSection(state.view.sec); }
 
+  const viewKey = [state.view.type, state.view.sec || "", state.tab, state.who, lang].join("|");
+  const entering = viewKey !== lastViewKey;
+  lastViewKey = viewKey;
+
   root.className = "shell";
   root.innerHTML = `
     <aside class="sidebar">
@@ -1092,7 +1101,7 @@ function renderApp() {
           ${avatarHTML(me(), "avatar av-lg")}
         </button>
       </header>
-      <div class="content">${content}</div>
+      <div class="content${entering ? " enter" : ""}">${content}</div>
     </div>`;
 }
 
