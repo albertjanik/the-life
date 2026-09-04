@@ -31,9 +31,9 @@ contents of [`supabase/schema.sql`](supabase/schema.sql) and press **Run**. It c
 tables, the access rules and the `create_board` / `join_board` functions.
 
 The file is written to be run again at any time: when a change here adds a column or a rule,
-re-running it is the whole migration. **Run it again now if your project is older than the
-`members_update` policy** — without it your colour and your name on the board look saved and
-come back on the next read.
+re-running it is the whole migration. **Run it again after pulling** — the recent ones are the
+`members_update` policy (without it your colour and your name look saved and come back on the
+next read), dates that may now be empty, an icon on every section, and the `feedback` table.
 
 **3. Turn off email confirmation** (optional, but easier for two people).
 **Authentication → Sign In / Providers → Email** → switch **Confirm email** off. With it on,
@@ -82,9 +82,24 @@ GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow
 Learning · Dreams · Travel · Household · Car · Finances ·
 Health & Fitness · Work & Career · Family & Friends · Shopping & Pantry · Documents & Renewals
 
-Sections are data, not code — rename them in the `sections` table, or add your own with
-**New section** in the navigation. **Delete section** on a section's page removes it together
+Every section carries an icon you pick when you create it (32 to choose from), and the
+navigation shows those instead of two-letter codes. Sections are data, not code — rename them
+in the `sections` table, or add your own with **New section** in the navigation. **Delete section** on a section's page removes it together
 with everything inside it, after a dialog that counts what will go.
+
+### Tasks with no date
+
+Not everything has a day. A task can be saved with **No date** — the date and the repeat rule
+grey out — and it then stays out of the way: invisible under *today*, *a week*, *a month* and
+*a year*, gathered under **No date** at the end of *everything*, and on its own under the
+**No date** range. It is a list of things to do eventually, not a debt with a deadline.
+
+### Suggest an improvement
+
+Under your picture, next to Sharing: a box to type what annoyed you or what is missing. It
+goes to the `feedback` table with who wrote it, which board, and where in the app they were.
+Read them in Supabase → **Table editor → feedback**; only the person who wrote a line can read
+it back through the app.
 
 ### The four tiles
 

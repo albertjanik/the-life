@@ -853,3 +853,25 @@ input[type=date]::-webkit-date-and-time-value{ text-align:left }
 /* two lines: who, then how far ahead */
 .toolbar{ display:flex;flex-direction:column;gap:9px;margin-bottom:14px }
 .card-head .range select{ font-size:12px }
+
+/* ================= pictures instead of two letters ================= */
+.chip.emo{
+  background:var(--cat-bg);font-size:13px;line-height:1;
+  font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;
+}
+.chip.chip-lg.emo{ font-size:17px }
+.emoji-grid{
+  display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:6px;
+}
+.emoji-pick{
+  aspect-ratio:1;display:grid;place-items:center;font-size:19px;border-radius:9px;
+  border:1px solid transparent;background:var(--surface-2);transition:.14s var(--ease);
+}
+.emoji-pick:hover{ background:var(--surface);border-color:var(--line-2);transform:scale(1.08) }
+.emoji-pick.on{ border-color:var(--accent);background:var(--accent-soft);transform:scale(1.06) }
+@media (max-width:520px){ .emoji-grid{ grid-template-columns:repeat(6,1fr) } }
+
+/* a task with no date says so quietly */
+.t-date.nd{ color:var(--ink-3);font-style:italic }
+.tgroup.undated .tgroup-head h3{ color:var(--ink-3) }
+input:disabled{ opacity:.45;cursor:not-allowed }

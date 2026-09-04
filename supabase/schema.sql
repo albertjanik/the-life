@@ -112,6 +112,25 @@ create table if not exists public.subtasks (
 );
 create index if not exists subtasks_task_idx on public.subtasks (task_id, position);
 
+-- Added later: a task may have no date at all — something to do, just not by
+-- any particular day. Those live at the end of the list, out of the way.
+alter table public.tasks alter column due_date drop not null;
+
+-- Added later: a section is easier to find by its picture than by two letters.
+alter table public.sections add column if not exists emoji text;
+
+-- Added later: "suggest an improvement" — a line typed inside the app, read
+-- later in the table editor.
+create table if not exists public.feedback (
+  id         uuid primary key default gen_random_uuid(),
+  board_id   uuid references public.boards on delete set null,
+  user_id    uuid references auth.users on delete set null,
+  body       text not null,
+  context    text,
+  created_at timestamptz not null default now()
+);
+create index if not exists feedback_created_idx on public.feedback (created_at desc);
+
 create index if not exists tasks_board_due_idx  on public.tasks (board_id, done, due_date);
 create index if not exists notes_board_idx      on public.notes (board_id, section_id);
 create index if not exists habits_board_idx     on public.habits (board_id);
@@ -170,6 +189,7 @@ alter table public.notes         enable row level security;
 alter table public.habits        enable row level security;
 alter table public.habit_days    enable row level security;
 alter table public.subtasks      enable row level security;
+alter table public.feedback      enable row level security;
 
 drop policy if exists profiles_read   on public.profiles;
 drop policy if exists profiles_update on public.profiles;
@@ -213,6 +233,13 @@ begin
   end loop;
 end $$;
 
+drop policy if exists feedback_write on public.feedback;
+drop policy if exists feedback_read  on public.feedback;
+create policy feedback_write on public.feedback for insert
+  with check (user_id = auth.uid());
+create policy feedback_read on public.feedback for select
+  using (user_id = auth.uid());
+
 -- --------------------------------------------------------------- rpc
 
 create or replace function public.gen_invite_code()
@@ -253,18 +280,18 @@ begin
                    (select display_name from public.profiles where id = uid), 'Me'),
           163);
 
-  insert into public.sections (board_id, key, name, code, hue, description, position) values
-    (b_id,'learning','Learning','LE',230,'Courses, exams, reading and everything you are studying right now.',1),
-    (b_id,'dreams','Dreams','DR',295,'Things with no deadline that you keep coming back to.',2),
-    (b_id,'travel','Travel','TR',196,'Where you want to go, when, for how much, and what has to be booked first.',3),
-    (b_id,'household','Household','HO',120,'Cleaning, servicing, repairs and the rhythm of the house.',4),
-    (b_id,'car','Car','CA',210,'Deadlines, servicing, running costs and vehicle paperwork.',5),
-    (b_id,'finances','Finances','FI',38,'Household budget, bills, savings and money goals.',6),
-    (b_id,'health','Health & Fitness','HF',345,'Appointments, check-ups and the training plan.',7),
-    (b_id,'work','Work & Career','WC',262,'Career goals, reviews, certifications and formalities.',8),
-    (b_id,'family','Family & Friends','FF',16,'Birthdays, anniversaries, gifts, visits and shared plans.',9),
-    (b_id,'shopping','Shopping & Pantry','SP',76,'Shopping list, supplies and one-off things to buy.',10),
-    (b_id,'documents','Documents & Renewals','DO',170,'Contracts, insurance, expiry dates and subscriptions.',11);
+  insert into public.sections (board_id, key, name, code, hue, description, position, emoji) values
+    (b_id,'learning','Learning','LE',230,'Courses, exams, reading and everything you are studying right now.',1,'📚'),
+    (b_id,'dreams','Dreams','DR',295,'Things with no deadline that you keep coming back to.',2,'✨'),
+    (b_id,'travel','Travel','TR',196,'Where you want to go, when, for how much, and what has to be booked first.',3,'✈️'),
+    (b_id,'household','Household','HO',120,'Cleaning, servicing, repairs and the rhythm of the house.',4,'🏡'),
+    (b_id,'car','Car','CA',210,'Deadlines, servicing, running costs and vehicle paperwork.',5,'🚗'),
+    (b_id,'finances','Finances','FI',38,'Household budget, bills, savings and money goals.',6,'💰'),
+    (b_id,'health','Health & Fitness','HF',345,'Appointments, check-ups and the training plan.',7,'💪'),
+    (b_id,'work','Work & Career','WC',262,'Career goals, reviews, certifications and formalities.',8,'💼'),
+    (b_id,'family','Family & Friends','FF',16,'Birthdays, anniversaries, gifts, visits and shared plans.',9,'🎂'),
+    (b_id,'shopping','Shopping & Pantry','SP',76,'Shopping list, supplies and one-off things to buy.',10,'🛒'),
+    (b_id,'documents','Documents & Renewals','DO',170,'Contracts, insurance, expiry dates and subscriptions.',11,'📄');
 
   return b_id;
 end;
@@ -318,7 +345,8 @@ begin
     grant usage on schema public to authenticated;
     grant select, insert, update, delete on
       public.profiles, public.boards, public.board_members, public.sections,
-      public.tasks, public.notes, public.habits, public.habit_days, public.subtasks
+      public.tasks, public.notes, public.habits, public.habit_days, public.subtasks,
+      public.feedback
       to authenticated;
   end if;
 end $$;

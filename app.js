@@ -83,6 +83,12 @@ function sectionCode(s) {
   if (def && s.name === def.en && def.code) return def.code[lang] || def.code.en;
   return s?.code || "??";
 }
+
+/* A section is easier to find by its picture than by two letters. */
+function sectionIcon(s) {
+  return s?.emoji || DEFAULTS.sections[s?.key]?.emoji || "🔖";
+}
+const NAV_ICON = { overview: "🏠", upcoming: "✅", calendar: "🗓️", habits: "🔁" };
 function sectionDesc(s) {
   const def = DEFAULTS.descriptions[s?.key];
   if (def && s.description === def.en) return def[lang] || def.en;
@@ -172,7 +178,7 @@ applyTheme(theme);
 
 if (!CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY) {
   root.innerHTML = `<div class="setup">
-    <div class="brand" style="margin-bottom:14px"><div class="brand-mark">TL</div><div class="brand-name">The Life</div></div>
+    <div class="brand" style="margin-bottom:14px"><div class="brand-mark">L</div><div class="brand-name">The Life</div></div>
     <h1>${esc(t("setup_title"))}</h1>
     <p style="color:var(--ink-2)">${esc(t("setup_lede"))}</p>
     <ol><li>${t("setup_1")}</li><li>${t("setup_2")}</li><li>${t("setup_3")}</li><li>${t("setup_4")}</li></ol>
@@ -250,7 +256,7 @@ function renderAuth(msg, err) {
   root.className = "auth";
   root.innerHTML = `
     <div class="auth-art">
-      <div class="brand"><div class="brand-mark">TL</div><div class="brand-name">The Life</div></div>
+      <div class="brand"><div class="brand-mark">L</div><div class="brand-name">The Life</div></div>
       <div class="auth-lede">
         <h1>${esc(t("hero_title"))}</h1>
         <p>${esc(t("hero_lede"))}</p>
@@ -295,7 +301,7 @@ function renderNewPassword(msg, err) {
   root.className = "auth";
   root.innerHTML = `
     <div class="auth-art">
-      <div class="brand"><div class="brand-mark">TL</div><div class="brand-name">The Life</div></div>
+      <div class="brand"><div class="brand-mark">L</div><div class="brand-name">The Life</div></div>
       <div class="auth-lede">
         <h1>${esc(t("set_new_password"))}</h1>
         <p>${esc(t("set_new_password_lede"))}</p>
@@ -383,7 +389,7 @@ async function renderBoardPicker(err) {
   state.boards = await loadBoards();
   root.innerHTML = `
     <div class="auth-art">
-      <div class="brand"><div class="brand-mark">TL</div><div class="brand-name">The Life</div></div>
+      <div class="brand"><div class="brand-mark">L</div><div class="brand-name">The Life</div></div>
       <div class="auth-lede">
         <h1>${esc(t("boards_title"))}</h1>
         <p>${esc(t("boards_lede"))}</p>
@@ -531,7 +537,8 @@ async function addTask(draft) {
   if (!draft.title.trim()) return toast(t("err_need_title"));
   const row = {
     board_id: boardId(), section_id: draft.section_id, title: draft.title.trim(),
-    due_date: draft.due_date || off(0), recurrence: draft.recurrence || null,
+    due_date: draft.due_date === null ? null : draft.due_date || off(0),
+    recurrence: draft.due_date === null ? null : draft.recurrence || null,
     recur_from_completion: !!draft.recur_from_completion,
     description: draft.description || "",
     assignee_id: draft.assignee_id || null, important: !!draft.important, created_by: state.user.id
@@ -574,7 +581,7 @@ async function playRowExit(id, cls) {
 async function toggleTask(id) {
   const task = taskById(id);
   if (!task) return;
-  if (task.recurrence && !task.done) {
+  if (task.recurrence && task.due_date && !task.done) {
     const nd = nextDate(task);
     buzz([10, 40, 14]);
     await playRowExit(id, "shifting");
@@ -662,12 +669,12 @@ async function toggleHabitDay(habit_id, day) {
   }
 }
 
-async function addSection(name) {
+async function addSection(name, emoji) {
   const key = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24) || "section" + Date.now();
   const hue = Math.floor(Math.random() * 360);
   const code = name.replace(/[^\p{L}]/gu, "").slice(0, 2).toUpperCase() || "NS";
   await run(sb.from("sections").insert({
-    board_id: boardId(), key, name, code, hue, description: "",
+    board_id: boardId(), key, name, code, hue, description: "", emoji: emoji || "🔖",
     position: (state.sections.at(-1)?.position || 0) + 1
   }), t("section_added", { name }));
   await refreshAll(); renderApp();
@@ -785,8 +792,12 @@ const openTasks = () => state.tasks.filter((x) => !x.done && whoOk(x));
 
 /* How far ahead the Tasks list looks. Anything overdue always shows: a date
    that has passed is not "later", it is waiting. */
-const RANGES = { today: 0, week: 7, month: 31, year: 365, all: Infinity };
-const inRange = (task) => diff(task.due_date) <= RANGES[state.range];
+const RANGES = { today: 0, week: 7, month: 31, year: 365, all: Infinity, undated: null };
+const inRange = (task) => {
+  if (!task.due_date) return state.range === "undated" || state.range === "all";
+  if (state.range === "undated") return false;
+  return diff(task.due_date) <= RANGES[state.range];
+};
 
 function rangePickerHTML() {
   return `<label class="range" title="${esc(t("range_label"))}">
@@ -821,8 +832,9 @@ function taskDetailsHTML(task) {
 }
 
 function taskHTML(task, i = 0) {
-  const s = secById(task.section_id), n = diff(task.due_date);
-  const cls = n < 0 ? "od" : n === 0 ? "td" : "";
+  const s = secById(task.section_id);
+  const n = task.due_date ? diff(task.due_date) : Infinity;
+  const cls = !task.due_date ? "nd" : n < 0 ? "od" : n === 0 ? "td" : "";
   const p = task.assignee_id ? memberHue(task.assignee_id) : s.hue;
   const steps = stepsOf(task.id);
   const hasMore = !!task.description || steps.length > 0;
@@ -838,7 +850,7 @@ function taskHTML(task, i = 0) {
         <span class="t-title">${esc(task.title)}</span>
         <span class="t-meta">
           <span class="sec">${esc(sectionName(s))}</span><span>·</span>
-          <span class="t-date ${cls}">${human(task.due_date)}</span>
+          <span class="t-date ${cls}">${task.due_date ? human(task.due_date) : esc(t("no_date").toLowerCase())}</span>
           ${task.recurrence ? `<span class="badge rec">↻ ${esc(recLabel(task.recurrence))}${task.recur_from_completion ? " · " + esc(t("badge_from_done")) : ""}</span>` : ""}
           ${task.important ? `<span class="badge pri">${esc(t("important"))}</span>` : ""}
           ${task.description ? `<span class="badge">≡</span>` : ""}
@@ -856,10 +868,13 @@ function taskHTML(task, i = 0) {
 }
 
 function groupsHTML(list) {
+  const undated = list.filter((x) => !x.due_date);
+  list = list.filter((x) => x.due_date);
   const groups = [
     { k: "overdue", t: t("group_overdue"), items: [] }, { k: "today", t: t("group_today"), items: [] },
     { k: "tom", t: t("group_tomorrow"), items: [] }, { k: "week", t: t("group_week"), items: [] },
-    { k: "next", t: t("group_next_week"), items: [] }, { k: "later", t: t("group_later"), items: [] }
+    { k: "next", t: t("group_next_week"), items: [] }, { k: "later", t: t("group_later"), items: [] },
+    { k: "undated", t: t("group_undated"), items: undated }
   ];
   [...list].sort((a, b) => (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0)).forEach((task) => {
     const n = diff(task.due_date);
@@ -900,12 +915,16 @@ function streak(h) { let s = 0; for (let k = 0; k < 90; k++) { if (ticked(h, off
 
 function viewOverview() {
   const act = openTasks();
-  const od = act.filter((x) => diff(x.due_date) < 0);
-  const td = act.filter((x) => diff(x.due_date) === 0);
+  const od = act.filter((x) => x.due_date && diff(x.due_date) < 0);
+  const td = act.filter((x) => x.due_date && diff(x.due_date) === 0);
   const closed = state.tasks.filter((x) => x.done && whoOk(x)).length;
   const habitsShown = state.habits.filter((h) => whoOk(h));
   const habToday = habitsShown.filter((h) => ticked(h, off(0))).length;
-  const upcoming = [...act].filter(inRange).sort((a, b) => (a.due_date < b.due_date ? -1 : 1));
+  const upcoming = [...act].filter(inRange).sort((a, b) => {
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return a.due_date < b.due_date ? -1 : 1;
+  });
   const next = upcoming.slice(0, 6);
   const beyond = act.length - upcoming.length;
   const d = new Date();
@@ -931,7 +950,8 @@ function viewOverview() {
           : `<div class="empty">${esc(t("nothing_in_range"))}</div>`}</div>
         ${beyond ? `<p class="hint" style="margin:10px 0 0">${esc(t("later_waiting", { n: countLabel(beyond, "task_one", "task_many") }))}</p>` : ""}
         </div></div>
-      <div class="card"><div class="card-head"><h2>${esc(t("habits_today"))}</h2></div><div>
+      <div class="card"><div class="card-head"><h2>${esc(t("habits_today"))}</h2><div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" data-act="go" data-view="habits">${esc(t("all_habits"))}</button></div><div>
         ${habitsShown.length ? habitsShown.map((h, i) => `
           <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop === h.id + "|" + off(0) ? " just-done" : ""}"
             style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
@@ -946,10 +966,11 @@ function viewOverview() {
     <h2 style="font-size:16px;margin:22px 0 10px">${esc(t("sections"))}</h2>
     <div class="sec-grid">${state.sections.map((s) => {
       const n = openTasks().filter((x) => x.section_id === s.id).length;
-      const soon = openTasks().filter((x) => x.section_id === s.id).sort((a, b) => (a.due_date < b.due_date ? -1 : 1))[0];
+      const soon = openTasks().filter((x) => x.section_id === s.id && x.due_date)
+        .sort((a, b) => (a.due_date < b.due_date ? -1 : 1))[0];
       const notes = state.notes.filter((x) => x.section_id === s.id).length;
       return `<button class="sec-card" style="--h:${s.hue}" data-act="go" data-view="section" data-sec="${s.id}">
-        <div class="row" style="gap:9px"><span class="chip chip-lg">${esc(sectionCode(s))}</span><span class="nm">${esc(sectionName(s))}</span></div>
+        <div class="row" style="gap:9px"><span class="chip chip-lg emo">${esc(sectionIcon(s))}</span><span class="nm">${esc(sectionName(s))}</span></div>
         <div class="ln mono" style="font-size:12px">${esc(countLabel(n, "task_one", "task_many"))} · ${esc(countLabel(notes, "note_one", "note_many"))}</div>
         <div class="bar"><i style="width:${Math.min(100, n * 14 + 8)}%"></i></div>
         <div class="ln">${soon ? esc(t("next_is", { title: soon.title, when: human(soon.due_date) })) : esc(t("no_open_tasks"))}</div>
@@ -1068,7 +1089,7 @@ function viewSection(id) {
       <div class="card" style="margin-top:12px"><div class="card-head"><h2>${esc(t("history"))}</h2></div>
       <div class="card-body"><p style="margin:0;color:var(--ink-2)">${esc(t("closed_in_section", { n: doneN }))}</p></div></div>`;
   }
-  return `<div class="sec-head" style="--h:${s.hue}"><span class="chip chip-lg">${esc(sectionCode(s))}</span>
+  return `<div class="sec-head" style="--h:${s.hue}"><span class="chip chip-lg emo">${esc(sectionIcon(s))}</span>
       <div style="flex:1;min-width:0"><h1>${esc(sectionName(s))}</h1><p>${esc(sectionDesc(s))}</p></div>
       <button class="btn btn-ghost btn-sm sec-del" data-act="del-section" data-id="${id}">${esc(t("delete_section"))}</button></div>
     <div class="row" style="justify-content:space-between"><div class="tabs">
@@ -1106,22 +1127,22 @@ function renderApp() {
   root.innerHTML = `
     <aside class="sidebar">
       <div class="side-head">
-        <span class="brand-mark" aria-hidden="true">TL</span>
+        <span class="brand-mark" aria-hidden="true">L</span>
         <span><span class="side-panel-name">${esc(state.board.name)}</span>
         <span class="side-panel-sub">${esc(state.board.invite_code)}</span></span>
       </div>
       <div class="nav-group">${MAIN.map((m) => `
         <button class="nav-item${state.view.type === m.k ? " active" : ""}" style="--h:${m.h}" data-act="go" data-view="${m.k}">
-          <span class="chip">${m.code}</span>${esc(m.n)}<span class="nav-count">${counts[m.k]}</span></button>`).join("")}
+          <span class="chip emo">${NAV_ICON[m.k]}</span>${esc(m.n)}<span class="nav-count">${counts[m.k]}</span></button>`).join("")}
       </div>
       <div class="nav-group">
         <div class="nav-title">${esc(t("life_sections"))}</div>
         ${state.sections.map((s) => {
           const n = state.tasks.filter((x) => x.section_id === s.id && !x.done).length;
           return `<button class="nav-item${state.view.type === "section" && state.view.sec === s.id ? " active" : ""}" style="--h:${s.hue}" data-act="go" data-view="section" data-sec="${s.id}">
-            <span class="chip">${esc(sectionCode(s))}</span>${esc(sectionName(s))}<span class="nav-count">${n || ""}</span></button>`;
+            <span class="chip emo">${esc(sectionIcon(s))}</span>${esc(sectionName(s))}<span class="nav-count">${n || ""}</span></button>`;
         }).join("")}
-        <button class="nav-item" style="--h:163" data-act="new-section"><span class="chip">+</span>${esc(t("new_section"))}</button>
+        <button class="nav-item" style="--h:163" data-act="new-section"><span class="chip emo">➕</span>${esc(t("new_section"))}</button>
       </div>
 
     </aside>
@@ -1189,7 +1210,11 @@ function taskFormHTML(task, presetSection) {
       <input id="m-title" type="text" placeholder="${esc(t("task_placeholder"))}" value="${esc(task?.title || "")}"></div>
     <div class="grid2">
       <div class="field"><label for="m-sec">${esc(t("section"))}</label><select id="m-sec">${sectionOptions(task?.section_id ?? presetSection ?? state.view.sec)}</select></div>
-      <div class="field"><label for="m-date">${esc(t("date"))}</label><input id="m-date" type="date" value="${task?.due_date || off(0)}"></div>
+      <div class="field"><label for="m-date">${esc(t("date"))}</label>
+        <input id="m-date" type="date" value="${task?.due_date || off(0)}"${task && !task.due_date ? " disabled" : ""}>
+        <label class="check" style="margin-top:6px">
+          <input type="checkbox" id="m-nodate"${task && !task.due_date ? " checked" : ""}> ${esc(t("no_date"))}</label>
+      </div>
     </div>
     <div class="grid2">
       <div class="field"><label for="m-rec">${esc(t("repeat"))}</label><select id="m-rec">${recurrenceOptions(rec)}</select></div>
@@ -1215,7 +1240,7 @@ function readTaskForm() {
     steps: pendingSteps.slice(),
     title: $("m-title").value,
     section_id: $("m-sec").value,
-    due_date: $("m-date").value,
+    due_date: $("m-nodate").checked ? null : $("m-date").value,
     recurrence: $("m-rec").value || null,
     recur_from_completion: $("m-rec").value ? $("m-fromdone").checked : false,
     assignee_id: who === "shared" ? null : who,
@@ -1377,11 +1402,25 @@ function deleteSectionModal(id) {
   </div></div>`));
 }
 
+const EMOJI_CHOICES = [
+  "🔖","🏡","🚗","💰","📚","💪","💼","🎂","🛒","📄","✈️","✨",
+  "🌱","🐾","🎸","🍳","🧹","🛠️","👶","🎓","🏖️","⛰️","🎬","🎁",
+  "💍","🧾","🩺","🚲","☕","📷","🧺","🔑"
+];
+let pickedEmoji = "🔖";
+
+function emojiGridHTML() {
+  return `<div class="emoji-grid" id="s-emoji">${EMOJI_CHOICES.map((e) =>
+    `<button type="button" class="emoji-pick${e === pickedEmoji ? " on" : ""}" data-act="pick-emoji" data-emoji="${e}">${e}</button>`).join("")}</div>`;
+}
+
 function newSectionModal() {
+  pickedEmoji = "🔖";
   openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("new_section"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body"><div class="field"><label for="s-name">${esc(t("section_name"))}</label>
-      <input id="s-name" type="text" placeholder="${esc(t("section_placeholder"))}"></div></div>
+      <input id="s-name" type="text" placeholder="${esc(t("section_placeholder"))}"></div>
+      <div><label>${esc(t("icon"))}</label>${emojiGridHTML()}</div></div>
     <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
     <button class="btn btn-primary" data-act="save-section">${esc(t("add_section"))}</button></div>
   </div></div>`));
@@ -1421,7 +1460,7 @@ function openDrawer() {
     <div class="drawer-scrim" data-act="close-drawer"></div>
     <aside class="drawer">
       <div class="drawer-head">
-        <span class="brand-mark" aria-hidden="true">TL</span>
+        <span class="brand-mark" aria-hidden="true">L</span>
         <span class="drawer-title">${esc(t("menu"))}</span>
         <div class="spacer"></div>
         <button class="del" style="opacity:1" data-act="close-drawer" aria-label="${esc(t("close"))}">×</button>
@@ -1532,6 +1571,7 @@ function accountMenu(anchor) {
     </div>
     <button class="pop-item" data-act="settings"><span class="pop-ico">⚙</span>${esc(t("settings"))}</button>
     <button class="pop-item" data-act="share"><span class="pop-ico">↗</span>${esc(t("sharing"))}</button>
+    <button class="pop-item" data-act="suggest"><span class="pop-ico">✱</span>${esc(t("suggest"))}</button>
     <button class="pop-item" data-act="switch-board"><span class="pop-ico">⇄</span>${esc(t("switch_board"))}</button>
     <div class="pop-sep"></div>
     <button class="pop-item danger" data-act="sign-out"><span class="pop-ico">⏻</span>${esc(t("sign_out"))}</button>
@@ -1574,6 +1614,32 @@ window.addEventListener("scroll", (e) => {
   if (el && el.closest && el.closest(".popover")) return;
   closeMenu();
 }, true);
+
+function suggestModal() {
+  closeMenu();
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>${esc(t("suggest"))}</h2><div class="spacer"></div>
+      <button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body">
+      <p style="margin:0;color:var(--ink-2)">${esc(t("suggest_intro"))}</p>
+      <div class="field"><textarea id="sg-body" rows="5" placeholder="${esc(t("suggest_placeholder"))}"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
+      <button class="btn btn-primary" data-act="send-suggestion">${esc(t("suggest_send"))}</button></div>
+  </div></div>`));
+  $("sg-body").focus();
+}
+
+async function sendSuggestion() {
+  const body = $("sg-body").value.trim();
+  if (!body) return toast(t("err_suggest_empty"));
+  const context = [state.view.type, lang, `${window.innerWidth}x${window.innerHeight}`].join(" · ");
+  closeModal();
+  const { error } = await sb.from("feedback").insert({
+    board_id: state.board?.id || null, user_id: state.user.id, body, context
+  });
+  toast(error ? error.message : t("suggest_sent"));
+}
 
 function settingsModal() {
   const themes = [["system", t("theme_system")], ["light", t("theme_light")], ["dark", t("theme_dark")]];
@@ -1694,6 +1760,8 @@ document.addEventListener("click", async (e) => {
       return accountMenu(b);
     }
     case "settings": closeMenu(); return settingsModal();
+    case "suggest": return suggestModal();
+    case "send-suggestion": return sendSuggestion();
     case "set-hue": return saveMemberHue(+b.dataset.hue);
     case "remove-photo": return removeAvatar();
     case "set-lang": setLang(b.dataset.lang); return rerenderAfterLangOrTheme();
@@ -1816,11 +1884,17 @@ document.addEventListener("click", async (e) => {
     case "new-section": closeMenu(); closeDrawer(); return newSectionModal();
     case "del-section": return deleteSectionModal(b.dataset.id);
     case "confirm-del-section": return deleteSection(b.dataset.id);
+    case "pick-emoji": {
+      pickedEmoji = b.dataset.emoji;
+      document.querySelectorAll(".emoji-pick").forEach((x) => x.classList.toggle("on", x.dataset.emoji === pickedEmoji));
+      return;
+    }
     case "save-section": {
       const name = $("s-name").value.trim();
       if (!name) return toast(t("err_section_name"));
+      const emoji = pickedEmoji;
       closeModal();
-      return addSection(name);
+      return addSection(name, emoji);
     }
 
     /* sharing */
@@ -1843,6 +1917,15 @@ document.addEventListener("click", async (e) => {
 
 /* show or hide the "count from completion" option with the repeat select */
 document.addEventListener("change", (e) => {
+  if (e.target.id === "m-nodate") {
+    const date = $("m-date"), rec = $("m-rec");
+    date.disabled = e.target.checked;
+    if (rec) {
+      rec.disabled = e.target.checked;
+      if (e.target.checked) { rec.value = ""; $("m-fromdone-wrap")?.classList.add("hidden"); }
+    }
+    return;
+  }
   if (e.target.dataset?.act === "range") {
     state.range = e.target.value;
     try { localStorage.setItem("thelife-range", state.range); } catch {}

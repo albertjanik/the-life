@@ -98,6 +98,20 @@ window.THE_LIFE_I18N = {
     more_actions: "More",
     open_menu: "Open the menu",
 
+    /* suggestions, emoji, undated */
+    suggest: "Suggest an improvement",
+    suggest_intro: "Anything that annoyed you, anything missing, half an idea — it lands in the database and Albert reads it.",
+    suggest_placeholder: "What would you change?",
+    suggest_send: "Send it",
+    suggest_sent: "Thank you — it's in.",
+    err_suggest_empty: "Write a line first.",
+    icon: "Icon",
+    no_date: "No date",
+    no_date_hint: "Something to do, just not by any particular day. It waits at the end of the list.",
+    range_undated: "No date",
+    group_undated: "No date",
+    all_habits: "All habits",
+
     /* shell */
     overview: "Overview",
     upcoming: "Upcoming",
@@ -418,6 +432,20 @@ window.THE_LIFE_I18N = {
     more_actions: "Więcej",
     open_menu: "Otwórz menu",
 
+    /* suggestions, emoji, undated */
+    suggest: "Zaproponuj poprawę",
+    suggest_intro: "Cokolwiek Cię zirytowało, czegoś brakuje albo masz pół pomysłu — wyląduje w bazie, a Albert to przeczyta.",
+    suggest_placeholder: "Co byś zmienił?",
+    suggest_send: "Wyślij",
+    suggest_sent: "Dzięki — zapisane.",
+    err_suggest_empty: "Najpierw napisz choć linijkę.",
+    icon: "Ikonka",
+    no_date: "Bez terminu",
+    no_date_hint: "Coś do zrobienia, tylko nie na konkretny dzień. Czeka na końcu listy.",
+    range_undated: "Bez terminu",
+    group_undated: "Bez terminu",
+    all_habits: "Wszystkie nawyki",
+
     overview: "Przegląd",
     upcoming: "Nadchodzące",
     calendar: "Kalendarz",
@@ -628,17 +656,17 @@ window.THE_LIFE_I18N = {
    in either language. A section renamed by hand keeps the name it was given. */
 window.THE_LIFE_DEFAULTS = {
   sections: {
-    learning:  { en: "Learning",             pl: "Nauka",                 code: { en: "LE", pl: "NA" } },
-    dreams:    { en: "Dreams",               pl: "Marzenia",              code: { en: "DR", pl: "MA" } },
-    travel:    { en: "Travel",               pl: "Podróże",               code: { en: "TR", pl: "PO" } },
-    household: { en: "Household",            pl: "Gospodarstwo domowe",   code: { en: "HO", pl: "GD" } },
-    car:       { en: "Car",                  pl: "Samochód",              code: { en: "CA", pl: "SA" } },
-    finances:  { en: "Finances",             pl: "Finanse",               code: { en: "FI", pl: "FI" } },
-    health:    { en: "Health & Fitness",     pl: "Zdrowie i forma",       code: { en: "HF", pl: "ZD" } },
-    work:      { en: "Work & Career",        pl: "Praca i kariera",       code: { en: "WC", pl: "PR" } },
-    family:    { en: "Family & Friends",     pl: "Rodzina i znajomi",     code: { en: "FF", pl: "RO" } },
-    shopping:  { en: "Shopping & Pantry",    pl: "Zakupy i spiżarnia",    code: { en: "SP", pl: "ZA" } },
-    documents: { en: "Documents & Renewals", pl: "Dokumenty i terminy",   code: { en: "DO", pl: "DO" } }
+    learning:  { en: "Learning",             pl: "Nauka",                 code: { en: "LE", pl: "NA" } , emoji: "📚" },
+    dreams:    { en: "Dreams",               pl: "Marzenia",              code: { en: "DR", pl: "MA" } , emoji: "✨" },
+    travel:    { en: "Travel",               pl: "Podróże",               code: { en: "TR", pl: "PO" } , emoji: "✈️" },
+    household: { en: "Household",            pl: "Gospodarstwo domowe",   code: { en: "HO", pl: "GD" } , emoji: "🏡" },
+    car:       { en: "Car",                  pl: "Samochód",              code: { en: "CA", pl: "SA" } , emoji: "🚗" },
+    finances:  { en: "Finances",             pl: "Finanse",               code: { en: "FI", pl: "FI" } , emoji: "💰" },
+    health:    { en: "Health & Fitness",     pl: "Zdrowie i forma",       code: { en: "HF", pl: "ZD" } , emoji: "💪" },
+    work:      { en: "Work & Career",        pl: "Praca i kariera",       code: { en: "WC", pl: "PR" } , emoji: "💼" },
+    family:    { en: "Family & Friends",     pl: "Rodzina i znajomi",     code: { en: "FF", pl: "RO" } , emoji: "🎂" },
+    shopping:  { en: "Shopping & Pantry",    pl: "Zakupy i spiżarnia",    code: { en: "SP", pl: "ZA" } , emoji: "🛒" },
+    documents: { en: "Documents & Renewals", pl: "Dokumenty i terminy",   code: { en: "DO", pl: "DO" } , emoji: "📄" }
   },
   descriptions: {
     learning:  { en: "Courses, exams, reading and everything you are studying right now.", pl: "Kursy, egzaminy, materiały i wszystko, czego się teraz uczycie." },
