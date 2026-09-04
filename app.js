@@ -905,7 +905,9 @@ function viewOverview() {
   const wk = act.filter((x) => { const n = diff(x.due_date); return n > 0 && n <= 7; });
   const habitsShown = state.habits.filter((h) => whoOk(h));
   const habToday = habitsShown.filter((h) => ticked(h, off(0))).length;
-  const next = [...act].sort((a, b) => (a.due_date < b.due_date ? -1 : 1)).slice(0, 6);
+  const upcoming = [...act].filter(inRange).sort((a, b) => (a.due_date < b.due_date ? -1 : 1));
+  const next = upcoming.slice(0, 6);
+  const beyond = act.length - upcoming.length;
   const d = new Date();
   const dateLine = lang === "pl"
     ? `${names().dow[d.getDay()].replace(/^./, (c) => c.toUpperCase())}, ${d.getDate()} ${names().monthOfDay[d.getMonth()]} ${d.getFullYear()}`
@@ -922,8 +924,13 @@ function viewOverview() {
     </div>
     <div class="ov-grid" style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;margin-top:16px">
       <div class="card"><div class="card-head"><h2>${esc(t("coming_up"))}</h2><div class="spacer"></div>
+        ${rangePickerHTML()}
         <button class="btn btn-ghost btn-sm" data-act="go" data-view="upcoming">${esc(t("full_list"))}</button></div>
-        <div class="card-body"><div class="tlist">${next.length ? next.map((x, i) => taskHTML(x, i)).join("") : `<div class="empty">${esc(t("nothing_waiting"))}</div>`}</div></div></div>
+        <div class="card-body"><div class="tlist">${next.length
+          ? next.map((x, i) => taskHTML(x, i)).join("")
+          : `<div class="empty">${esc(t("nothing_in_range"))}</div>`}</div>
+        ${beyond ? `<p class="hint" style="margin:10px 0 0">${esc(t("later_waiting", { n: countLabel(beyond, "task_one", "task_many") }))}</p>` : ""}
+        </div></div>
       <div class="card"><div class="card-head"><h2>${esc(t("habits_today"))}</h2></div><div>
         ${habitsShown.length ? habitsShown.map((h, i) => `
           <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop === h.id + "|" + off(0) ? " just-done" : ""}"
@@ -969,9 +976,13 @@ function viewUpcoming() {
     ? groupsHTML(shown)
     : `<div class="empty">${esc(t("nothing_in_range"))}${later
         ? ` <span class="hint">${esc(t("later_waiting", { n: countLabel(later, "task_one", "task_many") }))}</span>` : ""}</div>`;
-  return `<div class="row" style="justify-content:space-between;margin-bottom:14px">
-      <div class="row" style="gap:10px">${rangePickerHTML()}${filtersHTML()}</div>
-      <button class="btn btn-ghost btn-sm" data-act="go" data-view="calendar">${esc(t("calendar_view"))}</button></div>
+  return `<div class="toolbar">
+      <div class="row">${filtersHTML()}</div>
+      <div class="row" style="justify-content:space-between">
+        ${rangePickerHTML()}
+        <button class="btn btn-ghost btn-sm" data-act="go" data-view="calendar">${esc(t("calendar_view"))}</button>
+      </div>
+    </div>
     ${list}
     ${shown.length && later ? `<p class="hint" style="margin:12px 0 0">${esc(t("later_waiting", { n: countLabel(later, "task_one", "task_many") }))}</p>` : ""}
     ${addBarHTML("task")}`;
