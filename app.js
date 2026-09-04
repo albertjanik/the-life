@@ -902,7 +902,7 @@ function viewOverview() {
   const act = openTasks();
   const od = act.filter((x) => diff(x.due_date) < 0);
   const td = act.filter((x) => diff(x.due_date) === 0);
-  const wk = act.filter((x) => { const n = diff(x.due_date); return n > 0 && n <= 7; });
+  const closed = state.tasks.filter((x) => x.done && whoOk(x)).length;
   const habitsShown = state.habits.filter((h) => whoOk(h));
   const habToday = habitsShown.filter((h) => ticked(h, off(0))).length;
   const upcoming = [...act].filter(inRange).sort((a, b) => (a.due_date < b.due_date ? -1 : 1));
@@ -919,7 +919,7 @@ function viewOverview() {
     <div class="grid-stats">
       <div class="stat${od.length ? " crit" : ""}"><div class="k">${esc(t("stat_overdue"))}</div><div class="v tnum">${od.length}</div><div class="s">${esc(od.length ? t("stat_overdue_yes") : t("stat_overdue_no"))}</div></div>
       <div class="stat warn"><div class="k">${esc(t("stat_today"))}</div><div class="v tnum">${td.length}</div><div class="s">${esc(t("stat_today_sub", { n: countLabel(td.length, "task_one", "task_many") }))}</div></div>
-      <div class="stat"><div class="k">${esc(t("stat_week"))}</div><div class="v tnum">${wk.length}</div><div class="s">${esc(t("stat_week_sub"))}</div></div>
+      <div class="stat"><div class="k">${esc(t("stat_done"))}</div><div class="v tnum">${closed}</div><div class="s">${esc(closed ? t("stat_done_sub") : t("stat_done_none"))}</div></div>
       <div class="stat"><div class="k">${esc(t("stat_habits"))}</div><div class="v tnum">${habToday}/${habitsShown.length}</div><div class="s">${esc(t("stat_habits_sub"))}</div></div>
     </div>
     <div class="ov-grid" style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;margin-top:16px">

@@ -68,7 +68,7 @@ GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow
 | --- | --- |
 | Sign in | Real accounts: email and password, session kept across devices, password reset by email |
 | Boards | Your boards, create a new one, or join one with an invite code |
-| Overview | Overdue / due today / this week / habits, what's next, and the section grid |
+| Overview | Overdue / due today / closed so far / habits, what's next, and the section grid |
 | Tasks | One timeline: Overdue → Today → Tomorrow → This week → Next week → Later, cut to how far ahead you want to look — **today** by default, or a week, a month, a year, everything |
 | Calendar | Month view; the colour bar is the section, a red outline means the date has passed |
 | Habits | 14-day grid, click any day (past days included), streaks; a habit ticked off today lights up in its owner's colour and says whose it is. Click a habit's name to rename it, move it, change how often or delete it |
@@ -85,6 +85,15 @@ Health & Fitness · Work & Career · Family & Friends · Shopping & Pantry · Do
 Sections are data, not code — rename them in the `sections` table, or add your own with
 **New section** in the navigation. **Delete section** on a section's page removes it together
 with everything inside it, after a dialog that counts what will go.
+
+### The four tiles
+
+Three of them are debts — what has slipped, what is due today, how many habits are still
+untouched — so the fourth is credit: **Done**, every task the two of you have ever closed.
+All four follow the person filter, so "mine" counts only your own and the shared ones.
+
+Repeating tasks are not in that count: they never close, they move to their next date. What
+it counts is the things that were finished and stayed finished.
 
 ### How far ahead
 
@@ -119,9 +128,8 @@ says what goes with it.
 
 A task can also carry **notes** (account numbers, an address, what was agreed) and a
 **checklist**. Tapping a task that has either unfolds them in place — the note, then the
-steps, tickable one by one. `⋮` on the right opens **Edit task** and **Delete**, and the
-tick sits at the far right, in the same place as a habit's, so both are closed with the same
-gesture.
+steps, tickable one by one. The tick sits at the far right, in the same place as a habit's,
+so both are closed with the same gesture.
 
 **+ Add** in the top bar asks what you are adding — **TASK** or **HABIT** — and opens the
 full form for it. The same button sits at the foot of the Tasks, Habits and section lists, so
