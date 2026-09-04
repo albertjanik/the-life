@@ -66,6 +66,18 @@ window.THE_LIFE_I18N = {
     joined_board: "Joined the board.",
     our_board: "Our board",
 
+    /* confirming, long press, adding from the bottom */
+    tasks_view: "Tasks",
+    add_task_btn: "+ New task",
+    add_habit_btn: "+ New habit",
+    hold_hint: "Hold a card for edit and delete",
+    confirm_delete: "Delete “{name}”?",
+    confirm_delete_task: "The task disappears for both of you. This cannot be undone.",
+    confirm_delete_task_steps: "The task and its {n} go with it. This cannot be undone.",
+    confirm_delete_habit: "The habit and every day ticked off on it go. This cannot be undone.",
+    confirm_delete_note: "The note disappears for both of you. This cannot be undone.",
+    step_one: "step", step_many: "steps",
+
     /* menu, adding, task card */
     menu: "Menu",
     add_something: "What are you adding?",
@@ -350,6 +362,30 @@ window.THE_LIFE_I18N = {
     err_code_unknown: "Nie ma tablicy o takim kodzie.",
     joined_board: "Dołączono do tablicy.",
     our_board: "Nasza tablica",
+
+    /* confirming, long press, adding from the bottom */
+    tasks_view: "Tasks",
+    add_task_btn: "+ New task",
+    add_habit_btn: "+ New habit",
+    hold_hint: "Hold a card for edit and delete",
+    confirm_delete: "Delete “{name}”?",
+    confirm_delete_task: "The task disappears for both of you. This cannot be undone.",
+    confirm_delete_task_steps: "The task and its {n} go with it. This cannot be undone.",
+    confirm_delete_habit: "The habit and every day ticked off on it go. This cannot be undone.",
+    confirm_delete_note: "The note disappears for both of you. This cannot be undone.",
+    step_one: "step", step_many: "steps",
+
+    /* confirming, long press, adding from the bottom */
+    tasks_view: "Zadania",
+    add_task_btn: "+ Nowe zadanie",
+    add_habit_btn: "+ Nowy nawyk",
+    hold_hint: "Przytrzymaj kafelek, aby edytować lub usunąć",
+    confirm_delete: "Usunąć „{name}”?",
+    confirm_delete_task: "Zadanie zniknie u obojga. Tego nie da się cofnąć.",
+    confirm_delete_task_steps: "Zadanie zniknie razem z krokami ({n}). Tego nie da się cofnąć.",
+    confirm_delete_habit: "Nawyk zniknie razem z całą historią odhaczeń. Tego nie da się cofnąć.",
+    confirm_delete_note: "Notatka zniknie u obojga. Tego nie da się cofnąć.",
+    step_one: "krok", step_many: "kroków",
 
     /* menu, adding, task card */
     menu: "Menu",

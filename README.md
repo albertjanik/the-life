@@ -69,7 +69,7 @@ GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow
 | Sign in | Real accounts: email and password, session kept across devices, password reset by email |
 | Boards | Your boards, create a new one, or join one with an invite code |
 | Overview | Overdue / due today / this week / habits, what's next, and the section grid |
-| Upcoming | Every task on one timeline: Overdue → Today → Tomorrow → This week → Next week → Later |
+| Tasks | Every task on one timeline: Overdue → Today → Tomorrow → This week → Next week → Later |
 | Calendar | Month view; the colour bar is the section, a red outline means the date has passed |
 | Habits | 14-day grid, click any day (past days included), streaks; a habit ticked off today lights up in its owner's colour and says whose it is. Click a habit's name to rename it, move it, change how often or delete it |
 | Section | Tasks, notes, habits and history for that part of life |
@@ -100,9 +100,14 @@ Each repeating task also carries a switch, **off by default**:
 
 ### Editing, notes and checklists
 
-A task is edited from `⋮` (or by tapping one that carries nothing to unfold, and from the
-calendar): title, section, date, repeat rule, who it belongs to, whether it's important.
-Clicking the section name on a task jumps straight to that section.
+**Hold a task or a habit** — a long press on a phone, a right-click or a held mouse button on
+a laptop — and a small menu offers **Edit** and **Delete**. Tapping a task that carries
+nothing to unfold opens the same editor: title, section, date, repeat rule, who it belongs
+to, whether it's important. Clicking the section name on a task jumps straight to that
+section.
+
+Nothing is deleted on one click: a task, a habit, a note or a section always asks first, and
+says what goes with it.
 
 A task can also carry **notes** (account numbers, an address, what was agreed) and a
 **checklist**. Tapping a task that has either unfolds them in place — the note, then the
@@ -110,8 +115,10 @@ steps, tickable one by one. `⋮` on the right opens **Edit task** and **Delete*
 tick sits at the far right, in the same place as a habit's, so both are closed with the same
 gesture.
 
-**+ Add** first asks what you are adding, a task or a habit, then opens the right form; a
-habit is a name, a section, a person and how often.
+**+ Add** in the top bar asks what you are adding — **TASK** or **HABIT** — and opens the
+full form for it. The same button sits at the foot of the Tasks, Habits and section lists, so
+adding always uses one dialog rather than a cramped inline row: a task with its notes, steps,
+repeat rule and owner; a habit with its section, person and how often.
 
 <p align="center">
   <img src="docs/checklist.png" width="62%" alt="A task with its checklist open">
@@ -119,9 +126,10 @@ habit is a name, a section, a person and how often.
 
 ### On a phone
 
-Below 900 px the sidebar becomes a drawer: three lines in the top-left corner slide the whole
-navigation in from the left, headed by **Menu**. The top bar carries the view's name, then
-**+ Add** and your picture. Nothing scrolls sideways.
+Below 900 px the sidebar becomes a drawer: three lines in the top-left corner — or a swipe
+rightwards from the left edge — slide the whole navigation out, headed by **Menu**. It
+retracts to the left on close, on a swipe left, on Escape, or when you pick something. The
+top bar carries the view's name, then **+ Add** and your picture. Nothing scrolls sideways.
 
 <p align="center">
   <img src="docs/mobile.png" width="34%" alt="The section dropdown on a phone">
@@ -153,9 +161,9 @@ into place. Phones that support it give a small buzz on a tick (iOS Safari has n
 API, so there it is silent).
 
 Pulling down at the top of a list stretches the page and refreshes on release, with the
-rubber band and spring the browser's own gesture would have given. The connection state is
-silent unless it breaks: an amber **Offline** chip appears in the top bar and everything
-keeps working locally until it reconnects.
+rubber band and spring the browser's own gesture would have given; the end of a list gives a
+little too. A ticked task does not fade politely — it flashes in its owner's colour and bolts
+off the right edge before the row collapses.
 
 All of it respects the system "reduce motion" setting.
 

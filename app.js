@@ -562,7 +562,7 @@ async function playRowExit(id, cls) {
   if (!row || reducedMotion()) return;
   row.style.setProperty("--row-h", `${row.offsetHeight}px`);
   row.classList.add(cls);
-  await wait(cls === "leaving" ? 460 : 380);
+  await wait(cls === "leaving" ? 620 : 500);
 }
 
 async function toggleTask(id) {
@@ -631,14 +631,8 @@ async function deleteNote(id) {
   await run(sb.from("notes").delete().eq("id", id), t("note_deleted"));
 }
 
-async function addHabit(draft) {
-  const d = draft || {
-    name: $("hb-name").value,
-    section_id: $("hb-sec").value,
-    who: $("hb-who").value,
-    target: t("freq_daily")
-  };
-  if (!d.name.trim()) return toast(t("err_habit_name"));
+async function addHabit(d) {
+  if (!d || !d.name.trim()) return toast(t("err_habit_name"));
   await run(sb.from("habits").insert({
     board_id: boardId(), section_id: d.section_id, name: d.name.trim(),
     assignee_id: d.who === "shared" ? null : d.who, target: d.target || t("freq_daily")
@@ -831,10 +825,7 @@ function taskHTML(task, i = 0) {
           ${hasMore ? `<span class="chev-mini${open ? " up" : ""}">▾</span>` : ""}
         </span>
       </button>
-      <span class="who-wrap" title="${esc(memberName(task.assignee_id))}">
-        ${whoBadge(task.assignee_id)}<span class="who-name">${esc(memberName(task.assignee_id))}</span>
-      </span>
-      <button class="kebab" data-act="task-menu" data-id="${task.id}" aria-label="${esc(t("more_actions"))}">⋮</button>
+      <span class="who-wrap corner" title="${esc(memberName(task.assignee_id))}">${whoBadge(task.assignee_id)}</span>
       <button class="tick" data-act="toggle" data-id="${task.id}" aria-label="${esc(t("task_closed"))}">
         <svg viewBox="0 0 12 12" fill="none" stroke="${task.done ? "var(--on-accent)" : "currentColor"}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6.3 4.4 9.2 10.5 3"/></svg>
       </button>
@@ -915,7 +906,7 @@ function viewOverview() {
       <div class="card"><div class="card-head"><h2>${esc(t("habits_today"))}</h2></div><div>
         ${habitsShown.length ? habitsShown.map((h, i) => `
           <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop === h.id + "|" + off(0) ? " just-done" : ""}"
-            style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}">
+            style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
             <div class="hab-name">
               <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
               <div class="s">${esc(memberName(h.assignee_id))} · ${esc(habitTarget(h))}</div></div>
@@ -937,21 +928,21 @@ function viewOverview() {
     }).join("")}</div>`;
 }
 
-function quickAddHTML(sectionId) {
-  return `<div class="qa" style="margin-bottom:8px">
-    <input type="text" id="qa-title" placeholder="${esc(sectionId ? t("add_task_in", { section: sectionName(secById(sectionId)) }) : t("add_task_placeholder"))}">
-    ${sectionId ? `<input type="hidden" id="qa-sec" value="${sectionId}">` : `<select id="qa-sec">${sectionOptions()}</select>`}
-    <input type="date" id="qa-date" value="${off(0)}">
-    <select id="qa-rec">${recurrenceOptions("")}</select>
-    <select id="qa-who">${assigneeOptions(state.user.id)}</select>
-    <button class="btn btn-primary btn-sm" data-act="qa">${esc(t("add"))}</button>
+/* One way in for everything: the same dialog the top bar opens. */
+function addBarHTML(kind, sectionId) {
+  return `<div class="add-bar">
+    <button class="btn btn-primary" data-act="${kind === "habit" ? "pick-habit" : "pick-task"}"
+      ${sectionId ? `data-sec="${sectionId}"` : ""}>
+      ${esc(kind === "habit" ? t("add_habit_btn") : t("add_task_btn"))}
+    </button>
+    <span class="hint">${esc(t("hold_hint"))}</span>
   </div>`;
 }
 
 function viewUpcoming() {
   return `<div class="row" style="justify-content:space-between;margin-bottom:14px">${filtersHTML()}
       <button class="btn btn-ghost btn-sm" data-act="go" data-view="calendar">${esc(t("calendar_view"))}</button></div>
-    ${quickAddHTML(null)}${groupsHTML(openTasks())}`;
+    ${groupsHTML(openTasks())}${addBarHTML("task")}`;
 }
 
 function viewCalendar() {
@@ -988,23 +979,17 @@ function viewHabits() {
       <span class="hint mono" style="font-size:11px">${first.getDate()} ${esc(names().monthShort[first.getMonth()])} → ${esc(t("today"))}</span></div>
       <div>${visible.length ? visible.map((h, i) => `
         <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop && fx.pop.startsWith(h.id + "|") ? " just-done" : ""}"
-          style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}">
+          style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
           <div class="hab-name">
             <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
             <div class="s"><button class="sec-link" data-act="go" data-view="section" data-sec="${h.section_id}">${esc(sectionName(secById(h.section_id)))}</button> · ${esc(habitTarget(h))}</div></div>
-          <span class="who-wrap" title="${esc(memberName(h.assignee_id))}">
-            ${whoBadge(h.assignee_id)}<span class="who-name">${esc(memberName(h.assignee_id))}</span></span>
+          <span class="who-wrap corner" title="${esc(memberName(h.assignee_id))}">${whoBadge(h.assignee_id)}</span>
           <div class="hgrid">${days.map((d) =>
             `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}${fx.pop === h.id + "|" + d ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}" title="${d}"></button>`).join("")}</div>
           <div class="streak">${esc(t("habit_streak", { n: streak(h) }))}</div>
         </div>`).join("") : `<div class="empty" style="margin:14px">${esc(t("no_habits_add_first"))}</div>`}
       </div></div>
-    <div class="qa" style="margin-top:12px">
-      <input type="text" id="hb-name" placeholder="${esc(t("new_habit_placeholder"))}">
-      <select id="hb-sec">${sectionOptions()}</select>
-      <select id="hb-who">${assigneeOptions(state.user.id)}</select>
-      <button class="btn btn-primary btn-sm" data-act="add-habit">${esc(t("add_habit"))}</button>
-    </div>`;
+    ${addBarHTML("habit")}`;
 }
 
 function viewSection(id) {
@@ -1015,7 +1000,7 @@ function viewSection(id) {
   const habs = state.habits.filter((h) => h.section_id === id);
   let body = "";
   if (state.tab === "tasks") {
-    body = quickAddHTML(id) + groupsHTML(tasks);
+    body = groupsHTML(tasks) + addBarHTML("task", id);
   } else if (state.tab === "notes") {
     body = `<div class="qa" style="margin-bottom:12px">
         <input type="text" id="nt-title" placeholder="${esc(t("note_title"))}">
@@ -1030,10 +1015,10 @@ function viewSection(id) {
     body = `<div class="card"><div class="card-head"><h2>${esc(t("habits_in_section"))}</h2></div><div>
       ${habs.length ? habs.map((h) => `
         <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop && fx.pop.startsWith(h.id + "|") ? " just-done" : ""}"
-          style="--h:${rowHue(h, s)}"><div class="hab-name">
+          style="--h:${rowHue(h, s)}" data-habit="${h.id}"><div class="hab-name">
           <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
           <div class="s">${esc(memberName(h.assignee_id))} · ${esc(habitTarget(h))}</div></div>
-          <span class="who-wrap" title="${esc(memberName(h.assignee_id))}">${whoBadge(h.assignee_id)}</span>
+          <span class="who-wrap corner" title="${esc(memberName(h.assignee_id))}">${whoBadge(h.assignee_id)}</span>
         <div class="hgrid">${habitDays().map((d) => `<button class="hcell${ticked(h, d) ? " on" : ""}${d === off(0) ? " today" : ""}${fx.pop === h.id + "|" + d ? " pop" : ""}" data-act="habit" data-id="${h.id}" data-day="${d}"></button>`).join("")}</div></div>`).join("")
         : `<div class="empty" style="margin:14px">${esc(t("no_habits_here"))}</div>`}
       </div></div>
@@ -1055,7 +1040,7 @@ function renderApp() {
   if (!state.board) return;
   const MAIN = [
     { k: "overview", n: t("overview"), code: "OV", h: 163 },
-    { k: "upcoming", n: t("upcoming"), code: "UP", h: 38 },
+    { k: "upcoming", n: t("tasks_view"), code: "TA", h: 38 },
     { k: "calendar", n: t("calendar"), code: "CA", h: 210 },
     { k: "habits", n: t("habits"), code: "HA", h: 295 }
   ];
@@ -1065,7 +1050,7 @@ function renderApp() {
   };
   let title = t("overview"), content = "";
   if (state.view.type === "overview") content = viewOverview();
-  else if (state.view.type === "upcoming") { title = t("upcoming"); content = viewUpcoming(); }
+  else if (state.view.type === "upcoming") { title = t("tasks_view"); content = viewUpcoming(); }
   else if (state.view.type === "calendar") { title = t("calendar"); content = viewCalendar(); }
   else if (state.view.type === "habits") { title = t("habits"); content = viewHabits(); }
   else { title = sectionName(secById(state.view.sec)); content = viewSection(state.view.sec); }
@@ -1100,7 +1085,6 @@ function renderApp() {
         </button>
         <h1>${esc(title)}</h1>
         <div class="spacer"></div>
-        ${state.live ? "" : `<span class="offline-chip" title="${esc(t("offline_note"))}"><span class="led"></span>${esc(t("offline"))}</span>`}
         <button class="btn btn-primary btn-sm" data-act="add-something">${esc(t("add_short"))}</button>
         <button class="acct-btn" data-act="account-menu" aria-haspopup="menu" title="${esc(me()?.display_name || displayName())}">
           ${avatarHTML(me(), "avatar av-lg")}
@@ -1151,13 +1135,13 @@ function refreshStepEditor() {
   $("m-step")?.focus();
 }
 
-function taskFormHTML(task) {
+function taskFormHTML(task, presetSection) {
   const rec = task?.recurrence || "";
   return `
     <div class="field"><label for="m-title">${esc(t("what_needs_doing"))}</label>
       <input id="m-title" type="text" placeholder="${esc(t("task_placeholder"))}" value="${esc(task?.title || "")}"></div>
     <div class="grid2">
-      <div class="field"><label for="m-sec">${esc(t("section"))}</label><select id="m-sec">${sectionOptions(task?.section_id ?? state.view.sec)}</select></div>
+      <div class="field"><label for="m-sec">${esc(t("section"))}</label><select id="m-sec">${sectionOptions(task?.section_id ?? presetSection ?? state.view.sec)}</select></div>
       <div class="field"><label for="m-date">${esc(t("date"))}</label><input id="m-date" type="date" value="${task?.due_date || off(0)}"></div>
     </div>
     <div class="grid2">
@@ -1197,21 +1181,23 @@ function addMenuModal() {
     <div class="modal-head"><h2>${esc(t("add_something"))}</h2><div class="spacer"></div>
       <button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">
-      <button class="pick-card pick-inline" data-act="pick-task">
-        <span class="chip chip-lg" style="--h:38">TA</span>
-        <span><span class="nm">${esc(t("a_task"))}</span><span class="ln">${esc(t("a_task_desc"))}</span></span>
-      </button>
-      <button class="pick-card pick-inline" data-act="pick-habit">
-        <span class="chip chip-lg" style="--h:295">HA</span>
-        <span><span class="nm">${esc(t("a_habit"))}</span><span class="ln">${esc(t("a_habit_desc"))}</span></span>
-      </button>
+      <div class="pick-pair">
+        <button class="pick-tile" style="--h:38" data-act="pick-task">
+          <span class="pick-name">${esc(t("a_task").toUpperCase())}</span>
+          <span class="pick-desc">${esc(t("a_task_desc"))}</span>
+        </button>
+        <button class="pick-tile" style="--h:295" data-act="pick-habit">
+          <span class="pick-name">${esc(t("a_habit").toUpperCase())}</span>
+          <span class="pick-desc">${esc(t("a_habit_desc"))}</span>
+        </button>
+      </div>
     </div>
   </div></div>`));
 }
 
 const FREQS = ["freq_daily", "freq_5w", "freq_3w", "freq_weekly", "freq_weekend"];
 
-function newHabitModal() {
+function newHabitModal(sectionId) {
   openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("new_habit"))}</h2><div class="spacer"></div>
       <button class="del" style="opacity:1" data-act="close">×</button></div>
@@ -1219,7 +1205,7 @@ function newHabitModal() {
       <div class="field"><label for="nh-name">${esc(t("habit_name"))}</label>
         <input id="nh-name" type="text" placeholder="${esc(t("new_habit_placeholder"))}"></div>
       <div class="grid2">
-        <div class="field"><label for="nh-sec">${esc(t("section"))}</label><select id="nh-sec">${sectionOptions(state.view.sec)}</select></div>
+        <div class="field"><label for="nh-sec">${esc(t("section"))}</label><select id="nh-sec">${sectionOptions(sectionId || state.view.sec)}</select></div>
         <div class="field"><label for="nh-who">${esc(t("who"))}</label><select id="nh-who">${assigneeOptions(state.user.id)}</select></div>
       </div>
       <div class="field"><label for="nh-freq">${esc(t("how_often"))}</label>
@@ -1231,11 +1217,12 @@ function newHabitModal() {
   $("nh-name").focus();
 }
 
-function newTaskModal() {
+function newTaskModal(sectionId) {
   pendingSteps = [];
+  const preset = sectionId || state.view.sec;
   openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(t("new_task"))}</h2><div class="spacer"></div><button class="del" style="opacity:1" data-act="close">×</button></div>
-    <div class="modal-body">${taskFormHTML(null)}</div>
+    <div class="modal-body">${taskFormHTML(null, preset)}</div>
     <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
     <button class="btn btn-primary" data-act="save-task">${esc(t("add"))}</button></div>
   </div></div>`));
@@ -1278,6 +1265,48 @@ function shareModal() {
       <button class="btn btn-ghost" data-act="close">${esc(t("close"))}</button>
       <button class="btn btn-primary" data-act="copy-code">${esc(t("copy_code"))}</button></div>
   </div></div>`));
+}
+
+/* Nothing disappears without a question. */
+function confirmModal({ title, body, confirm, act, id }) {
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true" style="width:min(420px,100%)">
+    <div class="modal-head"><h2>${esc(title)}</h2><div class="spacer"></div>
+      <button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body"><p style="margin:0;color:var(--ink-2)">${esc(body)}</p></div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("cancel"))}</button>
+      <button class="btn btn-danger" data-act="${act}" data-id="${id}">${esc(confirm)}</button></div>
+  </div></div>`));
+}
+
+function confirmDeleteTask(id) {
+  const task = taskById(id);
+  if (!task) return;
+  const steps = stepsOf(id).length;
+  confirmModal({
+    title: t("confirm_delete", { name: task.title }),
+    body: steps
+      ? t("confirm_delete_task_steps", { n: countLabel(steps, "step_one", "step_many") })
+      : t("confirm_delete_task"),
+    confirm: t("delete"), act: "do-del-task", id
+  });
+}
+
+function confirmDeleteHabit(id) {
+  const h = state.habits.find((x) => x.id === id);
+  if (!h) return;
+  confirmModal({
+    title: t("confirm_delete", { name: h.name }),
+    body: t("confirm_delete_habit"), confirm: t("delete_habit"), act: "do-del-habit", id
+  });
+}
+
+function confirmDeleteNote(id) {
+  const n = state.notes.find((x) => x.id === id);
+  if (!n) return;
+  confirmModal({
+    title: t("confirm_delete", { name: n.title }),
+    body: t("confirm_delete_note"), confirm: t("delete"), act: "do-del-note", id
+  });
 }
 
 function deleteSectionModal(id) {
@@ -1366,17 +1395,82 @@ function closeDrawer() {
   setTimeout(() => wrap.remove(), 240);
 }
 
-/* Edit or delete, from the ⋮ on a task. */
-function taskMenu(anchor, id) {
+/* Edit or delete, from holding a task or a habit. */
+function rowMenu(anchor, kind, id) {
   const open = document.querySelector("#menu-root .popover");
   closeMenu();
-  if (open && open.dataset.task === id) return;
-  const menu = el(`<div class="popover popover-task" role="menu" data-task="${id}">
-    <button class="pop-item" data-act="edit-task" data-id="${id}"><span class="pop-ico">✎</span>${esc(t("edit_task"))}</button>
-    <button class="pop-item danger" data-act="del-task" data-id="${id}"><span class="pop-ico">✕</span>${esc(t("delete"))}</button>
+  if (open && open.dataset.row === id) return;
+  const isTask = kind === "task";
+  const menu = el(`<div class="popover popover-task" role="menu" data-row="${id}">
+    <button class="pop-item" data-act="${isTask ? "edit-task" : "edit-habit"}" data-id="${id}">
+      <span class="pop-ico">✎</span>${esc(isTask ? t("edit_task") : t("edit_habit"))}</button>
+    <button class="pop-item danger" data-act="${isTask ? "del-task" : "del-habit-row"}" data-id="${id}">
+      <span class="pop-ico">✕</span>${esc(t("delete"))}</button>
   </div>`);
   placePopover(menu, anchor);
+  buzz(14);
 }
+
+/* A press that lingers is a request for options, not a tap. */
+(function holdToOpen() {
+  let timer = null, startX = 0, startY = 0, target = null, heldAt = 0;
+
+  /* the release after a hold is not a tap on whatever sat under the finger */
+  document.addEventListener("click", (e) => {
+    if (Date.now() - heldAt < 600 && !e.target.closest?.(".popover")) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
+
+  const cancel = () => { clearTimeout(timer); timer = null; target = null; };
+
+  const begin = (e, point) => {
+    const card = e.target.closest?.(".task, .hab");
+    if (!card || e.target.closest(".tick, .hcell, .step-tick, .popover, a, input, select, textarea")) return;
+    const kind = card.classList.contains("task") ? "task" : "habit";
+    const id = kind === "task" ? card.dataset.id : card.dataset.habit;
+    if (!id) return;
+    startX = point.clientX; startY = point.clientY; target = card;
+    timer = setTimeout(() => {
+      timer = null;
+      heldAt = Date.now();
+      card.classList.add("held");
+      setTimeout(() => card.classList.remove("held"), 260);
+      rowMenu(card, kind, id);
+    }, 480);
+  };
+
+  document.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return cancel();
+    begin(e, e.touches[0]);
+  }, { passive: true });
+  document.addEventListener("touchmove", (e) => {
+    if (!timer) return;
+    const p = e.touches[0];
+    if (Math.abs(p.clientX - startX) > 12 || Math.abs(p.clientY - startY) > 12) cancel();
+  }, { passive: true });
+  document.addEventListener("touchend", cancel, { passive: true });
+  document.addEventListener("touchcancel", cancel, { passive: true });
+
+  document.addEventListener("mousedown", (e) => { if (e.button === 0) begin(e, e); });
+  document.addEventListener("mousemove", (e) => {
+    if (!timer) return;
+    if (Math.abs(e.clientX - startX) > 12 || Math.abs(e.clientY - startY) > 12) cancel();
+  });
+  document.addEventListener("mouseup", cancel);
+
+  /* the desktop right-click lands on the same menu */
+  document.addEventListener("contextmenu", (e) => {
+    const card = e.target.closest?.(".task, .hab");
+    if (!card) return;
+    const kind = card.classList.contains("task") ? "task" : "habit";
+    const id = kind === "task" ? card.dataset.id : card.dataset.habit;
+    if (!id) return;
+    e.preventDefault();
+    rowMenu(card, kind, id);
+  });
+})();
 
 /* Small menu anchored to the account button. */
 function accountMenu(anchor) {
@@ -1528,15 +1622,23 @@ document.addEventListener("click", async (e) => {
     case "drawer": return openDrawer();
     case "close-drawer": return closeDrawer();
     case "add-something": return addMenuModal();
-    case "pick-task": closeModal(); return newTaskModal();
-    case "pick-habit": closeModal(); return newHabitModal();
+    case "pick-task": {
+      const sec = b.dataset.sec;
+      closeModal();
+      return newTaskModal(sec);
+    }
+    case "pick-habit": {
+      const sec = b.dataset.sec;
+      closeModal();
+      return newHabitModal(sec);
+    }
     case "save-habit": {
       const draft = { name: $("nh-name").value, section_id: $("nh-sec").value, who: $("nh-who").value, target: $("nh-freq").value };
       if (!draft.name.trim()) return toast(t("err_habit_name"));
       closeModal();
       return addHabit(draft);
     }
-    case "task-menu": return taskMenu(b, b.dataset.id);
+    case "del-habit-row": closeMenu(); return confirmDeleteHabit(b.dataset.id);
 
     /* account */
     case "account-menu": {
@@ -1605,9 +1707,12 @@ document.addEventListener("click", async (e) => {
 
     /* tasks */
     case "toggle": return toggleTask(b.dataset.id);
-    case "del-task": closeMenu(); return deleteTask(b.dataset.id);
-    case "del-task-modal": closeModal(); return deleteTask(b.dataset.id);
+    case "del-task": closeMenu(); return confirmDeleteTask(b.dataset.id);
+    case "del-task-modal": closeModal(); return confirmDeleteTask(b.dataset.id);
     case "edit-task": closeMenu(); return editTaskModal(b.dataset.id);
+    case "do-del-task": closeModal(); return deleteTask(b.dataset.id);
+    case "do-del-habit": closeModal(); return deleteHabit(b.dataset.id);
+    case "do-del-note": closeModal(); return deleteNote(b.dataset.id);
     case "new-task": return newTaskModal();
     case "save-task": {
       const draft = readTaskForm();
@@ -1642,19 +1747,10 @@ document.addEventListener("click", async (e) => {
       pendingSteps.splice(+b.dataset.id, 1);
       return refreshStepEditor();
     }
-    case "qa": {
-      const who = $("qa-who").value;
-      return addTask({
-        title: $("qa-title").value, section_id: $("qa-sec").value, due_date: $("qa-date").value,
-        recurrence: $("qa-rec").value || null, recur_from_completion: false,
-        assignee_id: who === "shared" ? null : who, important: false
-      });
-    }
 
     /* notes, habits, sections */
     case "add-note": return addNote(b.dataset.sec);
-    case "del-note": return deleteNote(b.dataset.id);
-    case "add-habit": return addHabit();
+    case "del-note": return confirmDeleteNote(b.dataset.id);
     case "edit-habit": return editHabitModal(b.dataset.id);
     case "update-habit": {
       const name = $("h-name").value.trim();
@@ -1668,7 +1764,7 @@ document.addEventListener("click", async (e) => {
       closeModal();
       return updateHabit(b.dataset.id, patch, t("habit_updated"));
     }
-    case "del-habit": closeModal(); return deleteHabit(b.dataset.id);
+    case "del-habit": closeModal(); return confirmDeleteHabit(b.dataset.id);
     case "habit": return toggleHabitDay(b.dataset.id, b.dataset.day);
     case "new-section": closeMenu(); closeDrawer(); return newSectionModal();
     case "del-section": return deleteSectionModal(b.dataset.id);
@@ -1711,15 +1807,14 @@ document.addEventListener("keydown", (e) => {
   const id = e.target.id;
   const click = (sel) => document.querySelector(sel)?.click();
   if (id === "m-step") { e.preventDefault(); return click('[data-act="add-step"]'); }
-  if (id === "qa-title") click('[data-act="qa"]');
   else if (id === "m-title") {
     const save = document.querySelector('[data-act="update-task"]') || document.querySelector('[data-act="save-task"]');
     save?.click();
   }
   else if (id === "s-name") click('[data-act="save-section"]');
   else if (id === "nt-title" || id === "nt-body") click('[data-act="add-note"]');
-  else if (id === "hb-name") click('[data-act="add-habit"]');
   else if (id === "h-name" || id === "h-target") click('[data-act="update-habit"]');
+  else if (id === "nh-name") click('[data-act="save-habit"]');
   else if (id === "new-board") click('[data-act="create-board"]');
   else if (id === "join-code") click('[data-act="join-board"]');
   else if (id === "np-1" || id === "np-2") click('[data-act="save-password"]');
@@ -1844,6 +1939,30 @@ sb.auth.onAuthStateChange(async (event, session) => {
     }
     setPull(0);
     setTimeout(() => spring(false), 360);
+  }, { passive: true });
+})();
+
+/* Swipe right to open the menu, swipe left to put it away. */
+(function swipeForDrawer() {
+  let x0 = 0, y0 = 0, tracking = false, fromDrawer = false;
+
+  document.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1 || !state.board) return;
+    if (document.querySelector(".modal")) return;
+    const p = e.touches[0];
+    fromDrawer = !!$("drawer");
+    tracking = fromDrawer || p.clientX < 44;      // the left edge, the way a phone expects
+    x0 = p.clientX; y0 = p.clientY;
+  }, { passive: true });
+
+  document.addEventListener("touchend", (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const p = e.changedTouches[0];
+    const dx = p.clientX - x0, dy = Math.abs(p.clientY - y0);
+    if (dy > 70) return;                          // that was a scroll
+    if (!fromDrawer && dx > 64) openDrawer();
+    if (fromDrawer && dx < -56) closeDrawer();
   }, { passive: true });
 })();
 
