@@ -125,6 +125,12 @@ sideways.
   <img src="docs/mobile.png" width="34%" alt="The section dropdown on a phone">
 </p>
 
+The layout also stays where you put it. A board is a list you tap, not a map you zoom, so
+pinch-zoom, double-tap zoom and pull-to-refresh are off, and every field is at least 16 px —
+below that Safari zooms into the page the moment a field takes focus, which is how it
+usually ended up stranded at 2×. Scrolling, panning and the browser's own zoom
+(⌘+ / Ctrl+) are untouched.
+
 ### Small things that matter
 
 Ticking a task off plays a short farewell — the row flashes, the tick draws itself and the

@@ -22,6 +22,24 @@ function toast(msg) {
   t._h = setTimeout(() => t.classList.remove("on"), 2600);
 }
 
+/* ------------------------------------------------------------- gestures
+
+   A board is a list you tap, not a map you zoom. Pinching and double-tapping
+   only ever happen here by accident — usually mid-scroll on a phone — and
+   leave the layout stranded at 2x. Scrolling and panning stay untouched, and
+   so does the browser's own zoom (⌘+ / Ctrl+), which people who need it use. */
+
+["gesturestart", "gesturechange", "gestureend"].forEach((ev) =>
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+
+document.addEventListener("touchmove", (e) => {
+  if (e.touches.length > 1) e.preventDefault();          // a pinch, not a scroll
+}, { passive: false });
+
+document.addEventListener("wheel", (e) => {
+  if (e.ctrlKey) e.preventDefault();                     // trackpad pinch on a laptop
+}, { passive: false });
+
 /* ------------------------------------------------------------- language */
 
 function detectLang() {

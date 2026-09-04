@@ -73,7 +73,14 @@
 }
 
 *{box-sizing:border-box}
+html{
+  -webkit-text-size-adjust:100%;text-size-adjust:100%;
+  touch-action:pan-x pan-y;overscroll-behavior:none;
+}
 body{
+  touch-action:pan-x pan-y;overscroll-behavior:none;
+  -webkit-tap-highlight-color:transparent;
+
   margin:0;
   background:var(--paper);
   color:var(--ink);
@@ -605,3 +612,12 @@ textarea{ resize:vertical;min-height:64px;font-family:inherit;line-height:1.45 }
 
 /* popovers stay inside the window */
 .popover{ overflow:auto;overscroll-behavior:contain;max-width:min(340px,calc(100vw - 16px)) }
+
+/* ================= no accidental zoom on a phone ================= */
+/* Safari zooms into any field whose text is under 16px when it gets focus. */
+@media (max-width:900px){
+  input,select,textarea,
+  .qa input[type=text],.qa select,.qa input[type=date]{ font-size:16px }
+}
+/* Double-tap zoom off, tap latency gone; scrolling and panning stay. */
+button,.task,.hab,.cal-day,.nav-item,.fchip,.tab,.chip,.avatar,.who,label.check{ touch-action:manipulation }
