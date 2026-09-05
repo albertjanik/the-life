@@ -112,6 +112,36 @@ window.THE_LIFE_I18N = {
     group_undated: "No date",
     all_habits: "Habits menu",
 
+    /* the calendar feed */
+    cal_label: "Calendar on your phone",
+    cal_label_hint: "Put the board's dated tasks into the Calendar app — and into its widget.",
+    cal_open: "Set it up",
+    cal_title: "Calendar on your phone",
+    cal_intro: "A calendar app cannot sign in, so it subscribes to a private address instead. Every dated task on this board shows up there as an all-day entry, with a reminder at 20:00 the evening before. Habits stay in The Life.",
+    cal_make: "Create my link",
+    cal_link: "Your private link",
+    cal_secret: "Treat it like a password: anyone holding it can read the board's tasks. Made a mistake? \u201cNew link\u201d below kills this one.",
+    cal_copy: "Copy the link",
+    cal_copied: "Link copied.",
+    cal_copy_failed: "Copying failed \u2014 select the link and copy it by hand.",
+    cal_new: "New link",
+    cal_reset_done: "New link ready. The old one stopped working \u2014 subscribe again on every phone.",
+    cal_iphone: "On an iPhone",
+    cal_iphone_steps: [
+      "Copy the link above.",
+      "Settings \u2192 Apps \u2192 Calendar \u2192 Calendar Accounts \u2192 Add Account \u2192 Other.",
+      "Add Subscribed Calendar, paste the link, Next, Save.",
+      "The tasks land in the Calendar app, so the calendar widget shows them too."
+    ],
+    cal_google: "In Google Calendar",
+    cal_google_steps: [
+      "calendar.google.com \u2192 Other calendars \u2192 + \u2192 From URL.",
+      "Paste the link and add the calendar.",
+      "It reaches your Android phone through your Google account."
+    ],
+    cal_delay: "Calendars ask for the address on their own schedule: an iPhone roughly every hour, Google sometimes only once or twice a day. A task added now is not there a second later \u2014 subscribe on the phone itself rather than through Google if you want it sooner.",
+    cal_readonly: "It reads only. Ticking things off, editing and deleting stay here in The Life; the calendar catches up on its next refresh.",
+
     /* shell */
     overview: "Overview",
     upcoming: "Upcoming",
@@ -444,7 +474,37 @@ window.THE_LIFE_I18N = {
     no_date_hint: "Coś do zrobienia, tylko nie na konkretny dzień. Czeka na końcu listy.",
     range_undated: "Bez terminu",
     group_undated: "Bez terminu",
-    all_habits: "Menu nawyków",
+    all_habits: "Menu nawyk\u00f3w",
+
+    /* the calendar feed */
+    cal_label: "Kalendarz w telefonie",
+    cal_label_hint: "Zadania z termin\u00f3w tej tablicy w aplikacji Kalendarz \u2014 i w jej wid\u017cecie.",
+    cal_open: "Ustaw",
+    cal_title: "Kalendarz w telefonie",
+    cal_intro: "Aplikacja Kalendarz nie umie si\u0119 zalogowa\u0107, wi\u0119c zamiast tego subskrybuje prywatny adres. Ka\u017cde zadanie z terminem z tej tablicy pojawia si\u0119 tam jako wpis ca\u0142odniowy, z przypomnieniem o 20:00 dnia poprzedniego. Nawyki zostaj\u0105 w The Life.",
+    cal_make: "Utw\u00f3rz m\u00f3j link",
+    cal_link: "Tw\u00f3j prywatny link",
+    cal_secret: "Traktuj go jak has\u0142o: kto go ma, ten czyta zadania z tablicy. Wyciek\u0142? \u201eNowy link\u201d poni\u017cej unieszkodliwia ten.",
+    cal_copy: "Skopiuj link",
+    cal_copied: "Link skopiowany.",
+    cal_copy_failed: "Nie uda\u0142o si\u0119 skopiowa\u0107 \u2014 zaznacz link i skopiuj r\u0119cznie.",
+    cal_new: "Nowy link",
+    cal_reset_done: "Nowy link gotowy. Stary przesta\u0142 dzia\u0142a\u0107 \u2014 zasubskrybuj ponownie na ka\u017cdym telefonie.",
+    cal_iphone: "Na iPhonie",
+    cal_iphone_steps: [
+      "Skopiuj link powy\u017cej.",
+      "Ustawienia \u2192 Aplikacje \u2192 Kalendarz \u2192 Konta kalendarza \u2192 Dodaj konto \u2192 Inne.",
+      "Dodaj subskrybowany kalendarz, wklej link, Dalej, Zapisz.",
+      "Zadania trafiaj\u0105 do aplikacji Kalendarz, wi\u0119c widzi je te\u017c widget kalendarza."
+    ],
+    cal_google: "W Kalendarzu Google",
+    cal_google_steps: [
+      "calendar.google.com \u2192 Inne kalendarze \u2192 + \u2192 Z adresu URL.",
+      "Wklej link i dodaj kalendarz.",
+      "Na Androida trafi przez twoje konto Google."
+    ],
+    cal_delay: "Kalendarze pytaj\u0105 o adres we w\u0142asnym tempie: iPhone mniej wi\u0119cej co godzin\u0119, Google czasem raz czy dwa razy dziennie. Zadanie dodane teraz nie pojawi si\u0119 tam sekund\u0119 p\u00f3\u017aniej \u2014 je\u015bli zale\u017cy ci na czasie, subskrybuj bezpo\u015brednio na telefonie, nie przez Google.",
+    cal_readonly: "To po\u0142\u0105czenie tylko czyta. Odhaczanie, edycja i usuwanie zostaj\u0105 tutaj, w The Life; kalendarz nadrobi przy najbli\u017cszym od\u015bwie\u017ceniu.",
 
     overview: "Przegląd",
     upcoming: "Nadchodzące",

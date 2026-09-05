@@ -210,7 +210,8 @@ const state = {
   calMonth: new Date(today.getFullYear(), today.getMonth(), 1),
   live: false,
   authTab: "in",
-  recovery: false
+  recovery: false,
+  calToken: null          // the address of your calendar feed, once you ask for it
 };
 
 /* Lists animate in when you arrive somewhere new. Ticking something off is a
@@ -1681,12 +1682,74 @@ function settingsModal() {
       ${state.board ? `<div class="field"><label for="set-name">${esc(t("display_name"))}</label>
         <input id="set-name" type="text" value="${esc(me()?.display_name || displayName())}">
         <p class="hint" style="margin:2px 0 0">${esc(t("display_name_hint"))}</p></div>` : ""}
+      ${state.board ? `<div><label>${esc(t("cal_label"))}</label>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-act="calendar-feed">${esc(t("cal_open"))}</button>
+        <p class="hint" style="margin:6px 0 0">${esc(t("cal_label_hint"))}</p></div>` : ""}
       <div><label>${esc(t("password"))}</label>
         <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-act="change-password">${esc(t("change_password"))}</button></div>
     </div>
     <div class="modal-foot"><button class="btn btn-ghost" data-act="close">${esc(t("close"))}</button>
       <button class="btn btn-primary" data-act="save-settings">${esc(t("save"))}</button></div>
   </div></div>`));
+}
+
+/* ------------------------------------------------------- calendar feed */
+
+/* The address a calendar app subscribes to. The token is the key, so the
+   whole thing is treated like a password: shown once you ask for it, and
+   replaceable if it ever gets out. */
+function calFeedUrl() {
+  if (!state.calToken) return "";
+  const app = location.origin + location.pathname.replace(/index\.html$/, "");
+  return `${CFG.SUPABASE_URL}/functions/v1/calendar?t=${state.calToken}` +
+         `&lang=${lang}&app=${encodeURIComponent(app)}`;
+}
+
+function calendarModal() {
+  closeMenu();
+  const url = calFeedUrl();
+  openModal(el(`<div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>${esc(t("cal_title"))}</h2><div class="spacer"></div>
+      <button class="del" style="opacity:1" data-act="close">×</button></div>
+    <div class="modal-body">
+      <p style="margin:0;color:var(--ink-2)">${esc(t("cal_intro"))}</p>
+      ${url ? `<div><label>${esc(t("cal_link"))}</label>
+          <div class="code cal-url">${esc(url)}</div>
+          <p class="hint" style="margin:8px 0 0">${esc(t("cal_secret"))}</p></div>
+        <div><label>${esc(t("cal_iphone"))}</label>
+          <ol class="howto">${t("cal_iphone_steps").map((s) => `<li>${esc(s)}</li>`).join("")}</ol></div>
+        <div><label>${esc(t("cal_google"))}</label>
+          <ol class="howto">${t("cal_google_steps").map((s) => `<li>${esc(s)}</li>`).join("")}</ol></div>
+        <p class="hint" style="margin:0">${esc(t("cal_delay"))}</p>
+        <p class="hint" style="margin:0">${esc(t("cal_readonly"))}</p>`
+      : `<div><button class="btn btn-primary" data-act="cal-make">${esc(t("cal_make"))}</button></div>`}
+    </div>
+    <div class="modal-foot">
+      ${url
+        ? `<button class="btn btn-ghost" data-act="cal-reset">${esc(t("cal_new"))}</button>
+           <button class="btn btn-primary" data-act="cal-copy">${esc(t("cal_copy"))}</button>`
+        : `<button class="btn btn-ghost" data-act="close">${esc(t("close"))}</button>`}</div>
+  </div></div>`));
+}
+
+async function openCalendar() {
+  /* Ask the database whether this person already has one; make one only when
+     they press the button, so nobody gets a link they never wanted. */
+  if (!state.calToken && state.board) {
+    const { data } = await sb.from("calendar_feeds")
+      .select("token").eq("board_id", state.board.id).eq("user_id", state.user.id).maybeSingle();
+    state.calToken = data?.token || null;
+  }
+  calendarModal();
+}
+
+async function calToken(reset) {
+  const { data, error } = await sb.rpc("calendar_token", { p_board: state.board.id, p_reset: !!reset });
+  if (error) { toast(error.message); return; }
+  state.calToken = data;
+  closeModal();
+  calendarModal();
+  if (reset) toast(t("cal_reset_done"));
 }
 
 /* ------------------------------------------------------------- events */
@@ -1903,6 +1966,15 @@ document.addEventListener("click", async (e) => {
       try { await navigator.clipboard.writeText(state.board.invite_code); toast(t("code_copied")); }
       catch { toast(state.board.invite_code); }
       return;
+    /* calendar feed */
+    case "calendar-feed": closeModal(); return openCalendar();
+    case "cal-make": return calToken(false);
+    case "cal-reset": return calToken(true);
+    case "cal-copy":
+      try { await navigator.clipboard.writeText(calFeedUrl()); toast(t("cal_copied")); }
+      catch { toast(t("cal_copy_failed")); }
+      return;
+
     case "rotate-code": {
       const { data, error } = await sb.rpc("rotate_invite_code", { p_board: state.board.id });
       if (error) return toast(error.message);

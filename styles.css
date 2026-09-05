@@ -227,7 +227,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 /* ---------- cards ---------- */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
 .card-head{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
-.card-head h2{font-size:15px;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.card-head h2{font-size:15px;white-space:nowrap;flex:none;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .card-head .btn{white-space:nowrap;flex:none}
 .card-body{padding:14px 16px}
 .grid-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px}
@@ -360,6 +360,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
   font-family:"IBM Plex Mono",monospace;font-size:20px;letter-spacing:.18em;font-weight:600;background:var(--surface-2);
   border:1px dashed var(--line-2);border-radius:10px;padding:12px;text-align:center;
 }
+/* the calendar address: long, and meant to be selected by hand if copying fails */
+.code.cal-url{
+  font-size:12px;letter-spacing:0;text-align:left;line-height:1.5;padding:11px 12px;
+  word-break:break-all;user-select:all;-webkit-user-select:all;
+}
+.howto{ margin:6px 0 0;padding-left:20px;color:var(--ink-2);font-size:13.5px;line-height:1.55 }
+.howto li{ margin:3px 0;padding-left:2px }
 .member{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
 .member:last-child{border-bottom:none}
 .member .nm{font-weight:600}
@@ -853,7 +860,7 @@ input[type=date]::-webkit-date-and-time-value{ text-align:left }
 @media (max-width:900px){ .range select{ font-size:16px;padding:4px 26px 4px 11px } }
 /* two lines: who, then how far ahead */
 .toolbar{ display:flex;flex-direction:column;gap:9px;margin-bottom:14px }
-.card-head .range{ min-width:0 }
+.card-head .range{ min-width:0;flex:0 1 auto }
 .card-head .range select{ font-size:12px;min-width:0;text-overflow:ellipsis }
 
 /* ================= pictures instead of two letters ================= */

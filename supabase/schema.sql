@@ -131,6 +131,18 @@ create table if not exists public.feedback (
 );
 create index if not exists feedback_created_idx on public.feedback (created_at desc);
 
+-- Added later: the calendar feed. A calendar app cannot sign in, so the long
+-- random token in the address is the key. One per person per board, thrown
+-- away and made again from Settings whenever you want.
+create table if not exists public.calendar_feeds (
+  token      text primary key,
+  board_id   uuid not null references public.boards on delete cascade,
+  user_id    uuid not null references auth.users on delete cascade,
+  created_at timestamptz not null default now(),
+  last_seen  timestamptz,
+  unique (board_id, user_id)
+);
+
 create index if not exists tasks_board_due_idx  on public.tasks (board_id, done, due_date);
 create index if not exists notes_board_idx      on public.notes (board_id, section_id);
 create index if not exists habits_board_idx     on public.habits (board_id);
@@ -190,6 +202,7 @@ alter table public.habits        enable row level security;
 alter table public.habit_days    enable row level security;
 alter table public.subtasks      enable row level security;
 alter table public.feedback      enable row level security;
+alter table public.calendar_feeds enable row level security;
 
 drop policy if exists profiles_read   on public.profiles;
 drop policy if exists profiles_update on public.profiles;
@@ -238,6 +251,15 @@ drop policy if exists feedback_read  on public.feedback;
 create policy feedback_write on public.feedback for insert
   with check (user_id = auth.uid());
 create policy feedback_read on public.feedback for select
+  using (user_id = auth.uid());
+
+-- Your own feed row, and only through the app: the edge function reads this
+-- table with the service key, which is not in the browser and not in the repo.
+drop policy if exists feeds_read   on public.calendar_feeds;
+drop policy if exists feeds_delete on public.calendar_feeds;
+create policy feeds_read on public.calendar_feeds for select
+  using (user_id = auth.uid());
+create policy feeds_delete on public.calendar_feeds for delete
   using (user_id = auth.uid());
 
 -- --------------------------------------------------------------- rpc
@@ -338,6 +360,33 @@ begin
 end;
 $$;
 
+-- The address of your calendar feed. Called with p_reset when you want the old
+-- one to stop working: the row goes, a new token takes its place.
+create or replace function public.calendar_token(p_board uuid, p_reset boolean default false)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := auth.uid();
+  tk  text;
+begin
+  if uid is null then raise exception 'not authenticated'; end if;
+  if not public.is_board_member(p_board) then raise exception 'not a member of this board'; end if;
+
+  if p_reset then
+    delete from public.calendar_feeds where board_id = p_board and user_id = uid;
+  end if;
+
+  select token into tk from public.calendar_feeds
+   where board_id = p_board and user_id = uid;
+
+  if tk is null then
+    tk := encode(gen_random_bytes(24), 'hex');
+    insert into public.calendar_feeds (token, board_id, user_id) values (tk, p_board, uid);
+  end if;
+
+  return tk;
+end;
+$$;
+
 -- Table privileges (row level security above still decides which rows).
 do $$
 begin
@@ -346,7 +395,7 @@ begin
     grant select, insert, update, delete on
       public.profiles, public.boards, public.board_members, public.sections,
       public.tasks, public.notes, public.habits, public.habit_days, public.subtasks,
-      public.feedback
+      public.feedback, public.calendar_feeds
       to authenticated;
   end if;
 end $$;
@@ -354,6 +403,7 @@ end $$;
 grant execute on function public.create_board(text, text)      to authenticated;
 grant execute on function public.join_board(text, text)        to authenticated;
 grant execute on function public.rotate_invite_code(uuid)      to authenticated;
+grant execute on function public.calendar_token(uuid, boolean) to authenticated;
 
 -- --------------------------------------------------------- realtime
 

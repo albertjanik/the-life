@@ -33,7 +33,8 @@ tables, the access rules and the `create_board` / `join_board` functions.
 The file is written to be run again at any time: when a change here adds a column or a rule,
 re-running it is the whole migration. **Run it again after pulling** — the recent ones are the
 `members_update` policy (without it your colour and your name look saved and come back on the
-next read), dates that may now be empty, an icon on every section, and the `feedback` table.
+next read), dates that may now be empty, an icon on every section, the `feedback` table, and
+the `calendar_feeds` table with its `calendar_token` function.
 
 **3. Turn off email confirmation** (optional, but easier for two people).
 **Authentication → Sign In / Providers → Email** → switch **Confirm email** off. With it on,
@@ -48,6 +49,13 @@ Paste both into [`config.js`](config.js).
 **Site URL** to the address you actually open the app at (for example
 `https://<user>.github.io/the-life`) and add the same address under **Redirect URLs**.
 Without this, the link in a password-reset email sends people to `localhost:3000`.
+
+**4b. Deploy the calendar feed** (optional — only if you want tasks on your phone's calendar).
+**Edge Functions → Deploy a new function → via Editor**, name it `calendar`, paste the whole of
+[`supabase/functions/calendar/index.ts`](supabase/functions/calendar/index.ts), and **turn Verify
+JWT off** before deploying. A calendar app sends no sign-in, so with that switch on it gets a 401
+and the subscription silently never works. Nothing else to configure — the function reads the
+project's own keys from its environment, and the secret one never leaves it.
 
 **5. Open the app.** Double-click `index.html`, or push the repository and serve it from
 GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow is already in
@@ -75,7 +83,7 @@ GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow
 | Section | Tasks, notes, habits and history for that part of life |
 | Account | Your picture in the top-right corner: settings, sharing, switching boards and signing out |
 | Sharing | Invite code (the owner can roll it), who is on the board, and their roles |
-| Settings | Profile picture, your colour, interface language (English / Polski), theme, your name on the board, password |
+| Settings | Profile picture, your colour, interface language (English / Polski), theme, your name on the board, the calendar link, password |
 
 ### Life sections
 
@@ -93,6 +101,30 @@ Not everything has a day. A task can be saved with **No date** — the date and 
 grey out — and it then stays out of the way: invisible under *today*, *a week*, *a month* and
 *a year*, gathered under **No date** at the end of *everything*, and on its own under the
 **No date** range. It is a list of things to do eventually, not a debt with a deadline.
+
+### Calendar on your phone
+
+**Settings → Calendar on your phone → Set it up** hands you a private address. A calendar app
+cannot sign in, so it subscribes to that address instead and asks for it again every so often;
+the token in it is the key, which is why it is long, random, and replaceable — **New link** kills
+the old one on the spot.
+
+What arrives there is every dated task on the board, whoever it belongs to, as an all-day entry:
+the section's icon, the title, and who it is for. The notes and the checklist ride along in the
+description, and a reminder goes off at **20:00 the evening before**. Tasks with no date and
+finished tasks stay out; habits stay in The Life. A task that repeats on a fixed rhythm becomes a
+repeating event the calendar can work out for itself — one set to count from when it is ticked
+off cannot, so it appears at its current date and moves on the next refresh.
+
+On an iPhone: **Settings → Apps → Calendar → Calendar Accounts → Add Account → Other → Add
+Subscribed Calendar**. From then on the tasks are in the normal Calendar app, so the calendar
+widget shows them with no extra work. Google Calendar takes the same address under **Other
+calendars → + → From URL**.
+
+Two things worth knowing. It **only reads** — ticking off, editing and deleting happen here, and
+the calendar catches up when it next asks. And it asks on its own schedule: an iPhone roughly
+hourly, Google sometimes once or twice a day, so subscribe on the phone itself if you want the
+board and the calendar to stay close.
 
 ### Suggest an improvement
 
@@ -215,6 +247,7 @@ English. What either of you types (tasks, notes, sections, habits) is never tran
 | `config.js` | your project URL and anon key |
 | `vendor/supabase.js` | supabase-js v2, vendored so the app has no CDN dependency |
 | `supabase/schema.sql` | tables, row level security policies, RPC functions, realtime |
+| `supabase/functions/calendar/index.ts` | the calendar feed, deployed as a Supabase edge function |
 
 No build step and no package manager: what is in the repository is what runs.
 
@@ -224,7 +257,6 @@ No build step and no package manager: what is in the repository is what runs.
 - [ ] Subtasks, attachments and comments on tasks
 - [ ] Renaming sections and reordering by drag
 - [ ] Per-section privacy — a section only one of you can see
-- [ ] iCal export so dates land in a normal calendar
 - [ ] PWA with offline mode
 
 ## Licence
