@@ -33,8 +33,8 @@ tables, the access rules and the `create_board` / `join_board` functions.
 The file is written to be run again at any time: when a change here adds a column or a rule,
 re-running it is the whole migration. **Run it again after pulling** — the recent ones are the
 `members_update` policy (without it your colour and your name look saved and come back on the
-next read), dates that may now be empty, an icon on every section, the `feedback` table, and
-the `calendar_feeds` table with its `calendar_token` function.
+next read), dates that may now be empty, an icon on every section, the `feedback` table,
+the `calendar_feeds` table with its `calendar_token` function, and `colour` on `board_members`.
 
 **3. Turn off email confirmation** (optional, but easier for two people).
 **Authentication → Sign In / Providers → Email** → switch **Confirm email** off. With it on,
@@ -83,7 +83,7 @@ GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow
 | Section | Tasks, notes, habits and history for that part of life |
 | Account | Your picture in the top-right corner: settings, sharing, switching boards and signing out |
 | Sharing | Invite code (the owner can roll it), who is on the board, and their roles |
-| Settings | Profile picture, your colour, interface language (English / Polski), theme, your name on the board, the calendar link, password |
+| Settings | Profile picture, your colour and the app colour, interface language (English / Polski), theme, your name on the board, the calendar link, password |
 
 ### Life sections
 
@@ -208,11 +208,30 @@ of a list and the page stretches, springs back on release, and reloads the board
 
 ### Who a thing belongs to
 
-Every person on the board picks their own colour in **Settings** (colours already taken by
-the other person are dimmed). Tasks and habits carry the name and picture of whoever they
-are assigned to, and a row assigned to one person takes that person's colour: their tick,
-the flash when it is ticked off, and the tint a habit gets for the day. Shared rows keep the
-colour of their section.
+Tasks and habits carry the name and picture of whoever they are assigned to, and a row
+assigned to one person takes that person's colour: their tick, the flash when it is ticked
+off, and the tint a habit gets for the day. Shared rows keep the colour of their section.
+
+### Colours
+
+**Settings → Colours** has two of them, each a normal colour picker — the swatch opens the
+one your phone or laptop already uses, and next to it the hex is there if you know exactly
+what you want. Ten ready colours sit underneath for people who would rather just point, and
+the arrow puts it back to the green it started as.
+
+- **Your colour** — your initials, and the tasks and habits that are yours. It lives on the
+  board, so the other person sees it too. Pick one close to theirs and a line says so; it
+  does not stop you, it just points out that the two of you will be hard to tell apart.
+- **App colour** — buttons, the menu, the highlights, and the quiet tint the paper and the
+  text carry. This one is a choice about your own screen, like the theme, so it stays on the
+  device: one of you can run the board in plum and the other in green.
+
+Only the hue and how much colour it carries are taken from what you pick; how light or dark
+each thing is stays as the design set it. That is what keeps white text readable on a button
+and a pale note pale, whatever colour ends up behind them — no combination in the picker can
+drop the text below a legible contrast. The preview under the two rows shows a sample row in
+your colour; the app colour needs no preview, because the whole screen behind the dialog
+repaints while you drag.
 
 ### Small things that matter
 

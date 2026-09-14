@@ -1,75 +1,81 @@
 /* The Life — styles */
+
+/* The whole palette hangs off two numbers: the app colour's hue (--ah) and how
+   much colour it carries (--af, 1 = the default green). Lightness stays fixed
+   per role, so whatever colour is picked, text keeps its contrast. The same
+   trick colours a section (--h / --hf) and a person (--p / --pf). */
 :root{
-  --paper:#EAEDE7;
+  --ah:164; --af:1;
+  --paper:hsl(var(--ah) calc(var(--af) * 14%) 92%);
   --surface:#FFFFFF;
-  --surface-2:#F3F6F1;
-  --ink:#151B18;
-  --ink-2:#4C564F;
-  --ink-3:#7B857D;
-  --line:#D9DED4;
-  --line-2:#C6CDC0;
-  --accent:#2F6F5E;
-  --accent-2:#245647;
-  --accent-soft:#D8E8E1;
+  --surface-2:hsl(var(--ah) calc(var(--af) * 20%) 95%);
+  --ink:hsl(var(--ah) calc(var(--af) * 13%) 9%);
+  --ink-2:hsl(var(--ah) calc(var(--af) * 6%) 32%);
+  --ink-3:hsl(var(--ah) calc(var(--af) * 4%) 50%);
+  --line:hsl(var(--ah) calc(var(--af) * 13%) 85%);
+  --line-2:hsl(var(--ah) calc(var(--af) * 12%) 78%);
+  --accent:hsl(var(--ah) calc(var(--af) * 41%) 31%);
+  --accent-2:hsl(var(--ah) calc(var(--af) * 41%) 24%);
+  --accent-soft:hsl(var(--ah) calc(var(--af) * 26%) 88%);
   --on-accent:#FFFFFF;
   --crit:#A8331F;
   --crit-soft:#F5DFDA;
   --warn:#9C6510;
   --warn-soft:#F6E7CC;
-  --ok:#2F6F5E;
+  --ok:var(--accent);
   --shadow:0 1px 2px rgba(21,27,24,.06), 0 8px 24px -12px rgba(21,27,24,.18);
-  --cat-fg:hsl(var(--h,163) 42% 30%);
-  --cat-bg:hsl(var(--h,163) 34% 90%);
-  --cat-line:hsl(var(--h,163) 30% 78%);
+  --cat-fg:hsl(var(--h,163) calc(var(--hf,1) * 42%) 30%);
+  --cat-bg:hsl(var(--h,163) calc(var(--hf,1) * 34%) 90%);
+  --cat-line:hsl(var(--h,163) calc(var(--hf,1) * 30%) 78%);
   --r:10px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --paper:#111614;
-    --surface:#19201D;
-    --surface-2:#202722;
-    --ink:#E7EDE8;
-    --ink-2:#A7B2AB;
-    --ink-3:#78837B;
-    --line:#2B332E;
-    --line-2:#3A443E;
-    --accent:#6BBBA0;
-    --accent-2:#8ACFB6;
-    --accent-soft:#1D362E;
-    --on-accent:#0E1512;
+    --paper:hsl(var(--ah) calc(var(--af) * 13%) 8%);
+    --surface:hsl(var(--ah) calc(var(--af) * 12%) 11%);
+    --surface-2:hsl(var(--ah) calc(var(--af) * 10%) 14%);
+    --ink:hsl(var(--ah) calc(var(--af) * 14%) 92%);
+    --ink-2:hsl(var(--ah) calc(var(--af) * 7%) 68%);
+    --ink-3:hsl(var(--ah) calc(var(--af) * 4%) 49%);
+    --line:hsl(var(--ah) calc(var(--af) * 9%) 18%);
+    --line-2:hsl(var(--ah) calc(var(--af) * 8%) 25%);
+    --accent:hsl(var(--ah) calc(var(--af) * 37%) 62%);
+    --accent-2:hsl(var(--ah) calc(var(--af) * 42%) 71%);
+    --accent-soft:hsl(var(--ah) calc(var(--af) * 30%) 16%);
+    --on-accent:hsl(var(--ah) calc(var(--af) * 20%) 6%);
     --crit:#E5806C;
     --crit-soft:#3A211C;
     --warn:#DAA254;
     --warn-soft:#372A16;
-    --ok:#6BBBA0;
+    --ok:var(--accent);
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.7);
-    --cat-fg:hsl(var(--h,163) 45% 66%);
-    --cat-bg:hsl(var(--h,163) 26% 18%);
-    --cat-line:hsl(var(--h,163) 24% 28%);
+    --cat-fg:hsl(var(--h,163) calc(var(--hf,1) * 45%) 66%);
+    --cat-bg:hsl(var(--h,163) calc(var(--hf,1) * 26%) 18%);
+    --cat-line:hsl(var(--h,163) calc(var(--hf,1) * 24%) 28%);
   }
 }
 :root[data-theme="dark"]{
-  --paper:#111614;
-  --surface:#19201D;
-  --surface-2:#202722;
-  --ink:#E7EDE8;
-  --ink-2:#A7B2AB;
-  --ink-3:#78837B;
-  --line:#2B332E;
-  --line-2:#3A443E;
-  --accent:#6BBBA0;
-  --accent-2:#8ACFB6;
-  --accent-soft:#1D362E;
-  --on-accent:#0E1512;
+  --paper:hsl(var(--ah) calc(var(--af) * 13%) 8%);
+  --surface:hsl(var(--ah) calc(var(--af) * 12%) 11%);
+  --surface-2:hsl(var(--ah) calc(var(--af) * 10%) 14%);
+  --ink:hsl(var(--ah) calc(var(--af) * 14%) 92%);
+  --ink-2:hsl(var(--ah) calc(var(--af) * 7%) 68%);
+  --ink-3:hsl(var(--ah) calc(var(--af) * 4%) 49%);
+  --line:hsl(var(--ah) calc(var(--af) * 9%) 18%);
+  --line-2:hsl(var(--ah) calc(var(--af) * 8%) 25%);
+  --accent:hsl(var(--ah) calc(var(--af) * 37%) 62%);
+  --accent-2:hsl(var(--ah) calc(var(--af) * 42%) 71%);
+  --accent-soft:hsl(var(--ah) calc(var(--af) * 30%) 16%);
+  --on-accent:hsl(var(--ah) calc(var(--af) * 20%) 6%);
   --crit:#E5806C;
   --crit-soft:#3A211C;
   --warn:#DAA254;
   --warn-soft:#372A16;
-  --ok:#6BBBA0;
+  --ok:var(--accent);
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.7);
-  --cat-fg:hsl(var(--h,163) 45% 66%);
-  --cat-bg:hsl(var(--h,163) 26% 18%);
-  --cat-line:hsl(var(--h,163) 24% 28%);
+  --cat-fg:hsl(var(--h,163) calc(var(--hf,1) * 45%) 66%);
+  --cat-bg:hsl(var(--h,163) calc(var(--hf,1) * 26%) 18%);
+  --cat-line:hsl(var(--h,163) calc(var(--hf,1) * 24%) 28%);
 }
 
 *{box-sizing:border-box}
@@ -102,8 +108,8 @@ button{cursor:pointer;background:none;border:none;padding:0}
 .auth{min-height:100vh;display:grid;grid-template-columns:1.05fr .95fr}
 .auth-art{
   background:
-    radial-gradient(120% 90% at 12% 10%, rgba(47,111,94,.20), transparent 60%),
-    radial-gradient(100% 80% at 90% 85%, rgba(60,90,140,.18), transparent 60%),
+    radial-gradient(120% 90% at 12% 10%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 60%),
+    radial-gradient(100% 80% at 90% 85%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
     var(--surface-2);
   border-right:1px solid var(--line);
   padding:clamp(28px,5vw,64px);
@@ -212,8 +218,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
   font-family:"IBM Plex Mono",monospace;border:2px solid var(--paper);margin-left:-7px;
 }
 .avatar:first-child{margin-left:0}
-.av-a{background:#2F6F5E;color:#fff}
-.av-p{background:#7A4C86;color:#fff}
 .content{padding:22px;max-width:1180px;width:100%}
 .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .filters{display:flex;gap:6px;flex-wrap:wrap}
@@ -280,7 +284,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
   width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:9.5px;font-weight:700;
   font-family:"IBM Plex Mono",monospace;flex:none;
 }
-.who-both{background:linear-gradient(105deg,#2F6F5E 50%,#7A4C86 50%);color:#fff}
 .del{color:var(--ink-3);font-size:16px;line-height:1;padding:2px 4px;border-radius:6px;opacity:0;transition:.12s}
 .task:hover .del{opacity:1}
 .del:hover{background:var(--crit-soft);color:var(--crit)}
@@ -523,13 +526,89 @@ label.check input{width:auto}
 .avatar.av-lg{ width:34px;height:34px;font-size:13px;margin-left:0;border-width:0 }
 .avatar.av-xl{ width:62px;height:62px;font-size:22px;margin-left:0;border-width:0 }
 .who-shared{ color:#fff }
-.swatches{ display:flex;gap:8px;flex-wrap:wrap;margin-top:6px }
-.swatch{
-  width:26px;height:26px;border-radius:50%;border:2px solid transparent;
-  box-shadow:0 0 0 1px var(--line);transition:transform .14s var(--ease), border-color .14s;
+/* ================= picking a colour ================= */
+/* Two rows, the same shape: a big swatch that opens the system colour picker,
+   the hex for people who already know the answer, ten ready ones, and a way
+   back to the default. */
+.cpick{
+  display:grid;gap:8px 10px;align-items:center;margin-top:8px;
+  grid-template-columns:auto minmax(0,1fr) auto auto;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;
 }
-.swatch:hover{ transform:scale(1.12) }
-.swatch.on{ border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) }
+.cpick + .cpick{ margin-top:8px }
+.cpick.off{ opacity:.5;pointer-events:none }
+.cpick-dot{
+  width:38px;height:38px;border-radius:50%;position:relative;overflow:hidden;cursor:pointer;
+  box-shadow:0 0 0 1px var(--line-2), inset 0 1px 2px rgba(0,0,0,.18);
+  transition:transform .14s var(--ease), box-shadow .14s;
+}
+.cpick-dot:hover{ transform:scale(1.05) }
+.cpick-dot:focus-within{ box-shadow:0 0 0 2px var(--accent), 0 0 0 5px var(--accent-soft) }
+/* the native picker, stretched under the swatch so the whole circle opens it */
+.cpick-dot input[type=color]{
+  position:absolute;inset:-6px;width:calc(100% + 12px);height:calc(100% + 12px);
+  padding:0;border:none;background:none;opacity:0;cursor:pointer;
+}
+.cpick-text{ min-width:0 }
+.cpick-text .nm{ font-weight:600;font-size:14px;line-height:1.25 }
+.cpick-text .sub{ font-size:12.5px;color:var(--ink-3);line-height:1.3 }
+.cpick-hex{
+  width:9ch;flex:none;text-align:center;padding:6px 4px;font-size:13px;letter-spacing:.02em;
+  text-transform:uppercase;
+}
+.cpick-reset{
+  width:30px;height:30px;border-radius:8px;border:1px solid var(--line-2);color:var(--ink-2);
+  display:grid;place-items:center;font-size:15px;line-height:1;transition:background .14s,color .14s;
+}
+.cpick-reset:hover{ background:var(--surface);color:var(--ink) }
+.cpick-presets{ grid-column:1 / -1;display:flex;gap:7px;flex-wrap:wrap }
+.cdot{
+  width:24px;height:24px;border-radius:50%;border:2px solid transparent;
+  box-shadow:0 0 0 1px var(--line-2);transition:transform .14s var(--ease), border-color .14s;
+}
+.cdot:hover{ transform:scale(1.14) }
+.cdot.on{ border-color:var(--surface-2);box-shadow:0 0 0 2px var(--ink) }
+.cpick-warn{
+  grid-column:1 / -1;margin:0;font-size:12.5px;color:var(--warn);
+}
+/* On a phone the hex box would squeeze the description into a column of
+   single words, so it moves to its own line under the name. */
+@media (max-width:560px){
+  .cpick{ grid-template-columns:auto minmax(0,1fr) auto }
+  .cpick-dot{ grid-column:1;grid-row:1;width:34px;height:34px }
+  .cpick-text{ grid-column:2;grid-row:1 }
+  .cpick-reset{ grid-column:3;grid-row:1 }
+  .cpick-hex{ grid-column:1 / -1;grid-row:2;width:100%;max-width:none;text-align:left;padding-left:10px }
+  .cpick-presets{ grid-row:3;justify-content:space-between;gap:6px }
+  .cpick-warn{ grid-row:4 }
+}
+
+/* what your own colour will look like on a row; the app colour repaints the
+   whole screen behind the dialog, so it needs no box of its own */
+.cprev{
+  margin-top:10px;border:1px dashed var(--line-2);border-radius:var(--r);padding:10px 12px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.cprev-cap{
+  font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+  font-family:"IBM Plex Mono",monospace;
+}
+.cprev-row{ display:flex;align-items:center;gap:9px }
+.cprev-title{ font-weight:600;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+.cprev-who{
+  width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-size:10px;font-weight:600;color:#fff;font-family:"IBM Plex Mono",monospace;
+  background:hsl(var(--p,163) calc(var(--pf,1) * 42%) 35%);
+}
+.cprev-tick{
+  width:20px;height:20px;border-radius:6px;flex:none;
+  background:hsl(var(--p,163) calc(var(--pf,1) * 45%) 36%);
+}
+.cprev-row.app{ border-top:1px solid var(--line);padding-top:8px }
+.cprev-nav{
+  flex:1;font-size:13.5px;font-weight:600;padding:5px 9px;border-radius:8px;
+  background:var(--accent-soft);color:var(--ink);
+}
 
 /* ================= account button + menu ================= */
 .account{
@@ -677,23 +756,21 @@ button,.task,.hab,.cal-day,.nav-item,.fchip,.tab,.chip,.avatar,.who,label.check{
 .who-name{
   font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.task.mine .who-name{ color:hsl(var(--p) 38% 40%) }
-.task.mine .tick:hover{ border-color:hsl(var(--p) 45% 42%) }
+.task.mine .who-name{ color:hsl(var(--p) calc(var(--pf,1) * 38%) 40%) }
+.task.mine .tick:hover{ border-color:hsl(var(--p) calc(var(--pf,1) * 45%) 42%) }
 .task.mine.done .tick,.task.mine.leaving .tick,.task.mine.shifting .tick{
-  background:hsl(var(--p) 45% 36%);border-color:hsl(var(--p) 45% 36%);
+  background:hsl(var(--p) calc(var(--pf,1) * 45%) 36%);border-color:hsl(var(--p) calc(var(--pf,1) * 45%) 36%);
 }
-.task.leaving,.task.shifting{ --flash:hsl(var(--p) 40% 92%) }
+.task.leaving,.task.shifting{ --flash:hsl(var(--p) calc(var(--pf,1) * 40%) 92%) }
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) .task.mine .who-name{ color:hsl(var(--p) 45% 68%) }
+  :root:not([data-theme="light"]) .task.mine .who-name{ color:hsl(var(--p) calc(var(--pf,1) * 45%) 68%) }
   :root:not([data-theme="light"]) .task.leaving,
-  :root:not([data-theme="light"]) .task.shifting{ --flash:hsl(var(--p) 30% 20%) }
+  :root:not([data-theme="light"]) .task.shifting{ --flash:hsl(var(--p) calc(var(--pf,1) * 30%) 20%) }
 }
-:root[data-theme="dark"] .task.mine .who-name{ color:hsl(var(--p) 45% 68%) }
+:root[data-theme="dark"] .task.mine .who-name{ color:hsl(var(--p) calc(var(--pf,1) * 45%) 68%) }
 :root[data-theme="dark"] .task.leaving,
-:root[data-theme="dark"] .task.shifting{ --flash:hsl(var(--p) 30% 20%) }
+:root[data-theme="dark"] .task.shifting{ --flash:hsl(var(--p) calc(var(--pf,1) * 30%) 20%) }
 @media (max-width:520px){ .who-name{ display:none } }
-.swatch.taken{ opacity:.4 }
-.swatch.taken:hover{ opacity:.7 }
 
 /* ================= pull to refresh ================= */
 #pull{

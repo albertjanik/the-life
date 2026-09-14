@@ -174,6 +174,68 @@ let theme = "system";
 try { theme = localStorage.getItem("thelife-theme") || "system"; } catch {}
 applyTheme(theme);
 
+/* ------------------------------------------------------------- colour */
+
+/* Pick any colour you like; the app keeps the lightness. A colour carries a
+   hue and how much colour it has — the styles hold the third number, the
+   lightness, fixed for each job, so white text stays readable on a button
+   whatever you choose and a pale note never turns into a shout. */
+const DEFAULT_COLOUR = "#2F6F5E";
+const BASE_SAT = 42;   // the default green's saturation — the yardstick for "normal"
+
+const cleanHex = (v) => {
+  const m = String(v || "").trim().replace(/^#?/, "#");
+  if (/^#[0-9a-f]{3}$/i.test(m)) return "#" + m.slice(1).split("").map((c) => c + c).join("").toUpperCase();
+  return /^#[0-9a-f]{6}$/i.test(m) ? m.toUpperCase() : null;
+};
+
+/* hex -> { h: 0..360, f: how colourful, 1 = like the default green } */
+function colourParts(hex) {
+  const ok = cleanHex(hex);
+  if (!ok) return { h: 163, f: 1 };
+  const n = parseInt(ok.slice(1), 16);
+  const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  let h = 0, s = 0;
+  if (mx !== mn) {
+    const d = mx - mn;
+    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  return { h: Math.round(h), f: Math.min(1.4, (s * 100) / BASE_SAT) };
+}
+
+const hslHex = (h, f, l) => `hsl(${h} ${Math.round(f * BASE_SAT)}% ${l}%)`;
+
+/* the other way round, because <input type="color"> speaks nothing but hex */
+function toHex(h, s, l) {
+  h = ((h % 360) + 360) % 360; s /= 100; l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  const [r, g, b] =
+    h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] :
+    h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return "#" + [r, g, b].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+/* Somebody's colour: the one they picked, or the old hue if they never did. */
+function memberColour(member) {
+  if (member?.colour && cleanHex(member.colour)) return colourParts(member.colour);
+  return { h: member?.hue ?? 163, f: 1 };
+}
+
+/* The app's own colour is a choice about this screen, like the theme, so it
+   lives on the device rather than on the board. */
+let appColour = DEFAULT_COLOUR;
+try { appColour = cleanHex(localStorage.getItem("thelife-accent")) || DEFAULT_COLOUR; } catch {}
+
+function applyAppColour(hex) {
+  const { h, f } = colourParts(hex || DEFAULT_COLOUR);
+  document.documentElement.style.setProperty("--ah", h);
+  document.documentElement.style.setProperty("--af", f.toFixed(3));
+}
+applyAppColour(appColour);
+
 /* ------------------------------------------------------------- setup gate */
 
 if (!CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY) {
@@ -236,14 +298,21 @@ const memberName = (id) => (id ? memberById(id)?.display_name || "" : t("by_shar
 
 /* A row belongs to whoever it is assigned to; shared rows keep the section colour. */
 const rowHue = (row, section) => (row.assignee_id ? memberHue(row.assignee_id) : section?.hue ?? 163);
+const rowColour = (row, section) =>
+  (row.assignee_id ? memberColour(memberById(row.assignee_id)) : { h: section?.hue ?? 163, f: 1 });
+/* the two custom properties a row needs to wear somebody's colour */
+const rowVars = (row, section) => {
+  const { h, f } = rowColour(row, section);
+  return `--h:${h};--hf:${f.toFixed(3)}`;
+};
 
 function avatarHTML(member, cls = "avatar") {
-  const hue = member?.hue ?? 163;
+  const { h, f } = memberColour(member);
   const name = member?.display_name || "";
   if (member?.avatar_url) {
     return `<span class="${cls} has-photo" title="${esc(name)}"><img src="${esc(member.avatar_url)}" alt=""></span>`;
   }
-  return `<span class="${cls}" style="background:hsl(${hue} 42% 35%);color:#fff" title="${esc(name)}">${esc(initials(name))}</span>`;
+  return `<span class="${cls}" style="background:${hslHex(h, f, 35)};color:#fff" title="${esc(name)}">${esc(initials(name))}</span>`;
 }
 
 const profileAvatar = () => me()?.avatar_url || null;
@@ -699,19 +768,6 @@ async function deleteSection(id) {
   await refreshAll(); renderApp();
 }
 
-async function saveMemberHue(hue) {
-  const m = me();
-  if (m) m.hue = hue;
-  renderApp();
-  const { data, error } = await sb.from("board_members").update({ hue })
-    .eq("board_id", boardId()).eq("user_id", state.user.id).select("user_id");
-  if (error) toast(error.message);
-  else if (!data || !data.length) toast("Run supabase/schema.sql again — the board is missing the update rule.");
-  await refreshAll();
-  closeModal(); settingsModal();
-  renderApp();
-}
-
 /* Resize to a 128 px square in the browser, then keep it inline on the profile. */
 function resizeToDataURL(file, size = 128) {
   return new Promise((resolve, reject) => {
@@ -812,8 +868,9 @@ function rangePickerHTML() {
 function whoBadge(assignee_id) {
   if (!assignee_id) {
     const [a, b] = state.members;
+    const ca = memberColour(a), cb = b ? memberColour(b) : { h: 288, f: 1 };
     return `<span class="who who-shared" title="${esc(t("shared"))}"
-      style="background:linear-gradient(105deg,hsl(${a?.hue ?? 163} 45% 34%) 50%,hsl(${b?.hue ?? 288} 40% 42%) 50%)">◑</span>`;
+      style="background:linear-gradient(105deg,${hslHex(ca.h, ca.f * 1.07, 34)} 50%,${hslHex(cb.h, cb.f * 0.95, 42)} 50%)">◑</span>`;
   }
   return avatarHTML(memberById(assignee_id), "who");
 }
@@ -836,13 +893,13 @@ function taskHTML(task, i = 0) {
   const s = secById(task.section_id);
   const n = task.due_date ? diff(task.due_date) : Infinity;
   const cls = !task.due_date ? "nd" : n < 0 ? "od" : n === 0 ? "td" : "";
-  const p = task.assignee_id ? memberHue(task.assignee_id) : s.hue;
+  const owner = task.assignee_id ? memberColour(memberById(task.assignee_id)) : { h: s.hue, f: 1 };
   const steps = stepsOf(task.id);
   const hasMore = !!task.description || steps.length > 0;
   const open = state.expanded.has(task.id);
   const doneSteps = steps.filter((x) => x.done).length;
   return `<div class="task${task.done ? " done" : ""}${task.assignee_id ? " mine" : ""}${open ? " open" : ""}"
-    style="--h:${s.hue};--p:${p};--i:${Math.min(i, 12)}" data-id="${task.id}">
+    style="--h:${s.hue};--p:${owner.h};--pf:${owner.f.toFixed(3)};--i:${Math.min(i, 12)}" data-id="${task.id}">
     <div class="t-row">
       ${hasMore
         ? `<button class="t-main has-more" data-act="toggle-steps" data-id="${task.id}"
@@ -955,7 +1012,7 @@ function viewOverview() {
         <button class="btn btn-ghost btn-sm" data-act="go" data-view="habits">${esc(t("all_habits"))}</button></div><div>
         ${habitsShown.length ? habitsShown.map((h, i) => `
           <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop === h.id + "|" + off(0) ? " just-done" : ""}"
-            style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
+            style="${rowVars(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
             <div class="hab-name">
               <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
               <div class="s">${esc(habitTarget(h))}</div></div>
@@ -1044,7 +1101,7 @@ function viewHabits() {
       <span class="hint mono" style="font-size:11px">${first.getDate()} ${esc(names().monthShort[first.getMonth()])} → ${esc(t("today"))}</span></div>
       <div>${visible.length ? visible.map((h, i) => `
         <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop && fx.pop.startsWith(h.id + "|") ? " just-done" : ""}"
-          style="--h:${rowHue(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
+          style="${rowVars(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
           <div class="hab-name">
             <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
             <div class="s"><button class="sec-link" data-act="go" data-view="section" data-sec="${h.section_id}">${esc(sectionName(secById(h.section_id)))}</button> · ${esc(habitTarget(h))}</div></div>
@@ -1080,7 +1137,7 @@ function viewSection(id) {
     body = `<div class="card"><div class="card-head"><h2>${esc(t("habits_in_section"))}</h2></div><div>
       ${habs.length ? habs.map((h) => `
         <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop && fx.pop.startsWith(h.id + "|") ? " just-done" : ""}"
-          style="--h:${rowHue(h, s)}" data-habit="${h.id}"><div class="hab-name">
+          style="${rowVars(h, s)}" data-habit="${h.id}"><div class="hab-name">
           <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
           <div class="s">${esc(habitTarget(h))}</div></div>
           <span class="who-wrap corner" title="${esc(memberName(h.assignee_id))}">${whoBadge(h.assignee_id)}</span>
@@ -1328,7 +1385,7 @@ function shareModal() {
       <p class="hint" style="margin:8px 0 0">${esc(t("invite_code_hint"))}</p></div>
       <div><label>${esc(t("people_on_board"))}</label>
         ${state.members.map((m) => `<div class="member">
-          <span class="avatar" style="background:hsl(${m.hue} 42% 35%);color:#fff">${esc(initials(m.display_name))}</span>
+          <span class="avatar" style="background:${(({ h, f }) => hslHex(h, f, 35))(memberColour(m))};color:#fff">${esc(initials(m.display_name))}</span>
           <div><div class="nm">${esc(m.display_name)}${m.user_id === state.user.id ? esc(t("you_suffix")) : ""}</div>
           <div class="rl">${esc(m.role === "owner" ? t("role_owner") : t("role_member"))}${m.email ? ` · ${esc(m.email)}` : ""}</div></div></div>`).join("")}
       </div>
@@ -1660,14 +1717,17 @@ function settingsModal() {
           <p class="hint" style="margin:6px 0 0">${esc(t("photo_hint"))}</p>
         </div>
       </div>
-      ${state.board ? `<div><label>${esc(t("your_colour"))}</label>
-        <div class="swatches">${[163, 210, 288, 38, 345, 120, 262, 16].map((h) => {
-          const taken = state.members.find((m) => m.user_id !== state.user.id && m.hue === h);
-          return `<button class="swatch${(me()?.hue ?? 163) === h ? " on" : ""}${taken ? " taken" : ""}"
-            style="background:hsl(${h} 42% 40%)" data-act="set-hue" data-hue="${h}"
-            title="${esc(taken ? t("colour_taken", { name: taken.display_name }) : "")}"></button>`;
-        }).join("")}</div>
-        <p class="hint" style="margin:6px 0 0">${esc(t("colour_hint"))}</p></div>` : ""}
+      <div><label>${esc(t("colours"))}</label>
+        ${colourPickerHTML({
+          id: "mine", title: t("your_colour"), sub: t("your_colour_sub"),
+          value: myColourHex(), disabled: !state.board
+        })}
+        ${colourPickerHTML({
+          id: "app", title: t("app_colour"), sub: t("app_colour_sub"),
+          value: appColour, disabled: false
+        })}
+        ${colourPreviewHTML()}
+      </div>
       <div><label>${esc(t("language"))}</label>
         <div class="filters" style="margin-top:6px">
           ${["en", "pl"].map((l) => `<button class="fchip${lang === l ? " on" : ""}" data-act="set-lang" data-lang="${l}">${l === "en" ? "English" : "Polski"}</button>`).join("")}
@@ -1692,6 +1752,131 @@ function settingsModal() {
       <button class="btn btn-primary" data-act="save-settings">${esc(t("save"))}</button></div>
   </div></div>`));
 }
+
+/* ----------------------------------------------------------- colours UI */
+
+/* Eight ready answers for people who do not want to hunt through a colour
+   wheel; the wheel is one tap away for people who do. */
+const COLOUR_PRESETS = [163, 196, 230, 275, 320, 8, 32, 96]
+  .map((h) => toHex(h, BASE_SAT, 40));
+
+function myColourHex() {
+  const m = me();
+  const picked = cleanHex(m?.colour);
+  if (picked) return picked;
+  const { h, f } = memberColour(m);
+  return toHex(h, f * BASE_SAT, 40);
+}
+
+/* One row: a big swatch that opens the system colour picker, the hex for
+   people who know exactly what they want, presets, and a way back to the
+   default. The swatch is a real <input type="color">, so on every phone and
+   laptop it is the picker people already know. */
+function colourPickerHTML({ id, title, sub, value, disabled }) {
+  const hex = cleanHex(value) || DEFAULT_COLOUR;
+  const { h, f } = colourParts(hex);
+  return `<div class="cpick${disabled ? " off" : ""}" data-pick="${id}">
+    <label class="cpick-dot" style="background:${hslHex(h, f, 40)}">
+      <input type="color" id="cp-${id}" value="${hex}" data-pick="${id}"
+        aria-label="${esc(title)}"${disabled ? " disabled" : ""}>
+    </label>
+    <div class="cpick-text"><div class="nm">${esc(title)}</div><div class="sub">${esc(sub)}</div></div>
+    <input class="cpick-hex mono" id="ch-${id}" value="${hex}" data-pick="${id}"
+      spellcheck="false" autocomplete="off" maxlength="7" aria-label="${esc(title)} — hex"${disabled ? " disabled" : ""}>
+    <button class="cpick-reset" data-act="colour-reset" data-pick="${id}"
+      title="${esc(t("colour_default"))}" aria-label="${esc(t("colour_default"))}">↺</button>
+    <div class="cpick-presets">${COLOUR_PRESETS.map((c) =>
+      `<button class="cdot${c === hex ? " on" : ""}" style="background:${c}"
+        data-act="colour-preset" data-pick="${id}" data-hex="${c}" aria-label="${c}"></button>`).join("")}</div>
+    ${id === "mine" ? `<p class="cpick-warn hidden" id="cp-warn"></p>` : ""}
+  </div>`;
+}
+
+/* You are changing how the board looks, so the board is what you should be
+   looking at. The app colour repaints everything live behind this dialog;
+   this strip is here for your own colour, which only shows on your rows. */
+function colourPreviewHTML() {
+  const { h, f } = colourParts(myColourHex());
+  return `<div class="cprev" id="cprev" style="--p:${h};--pf:${f.toFixed(3)}">
+    <div class="cprev-cap">${esc(t("colour_preview"))}</div>
+    <div class="cprev-row">
+      <span class="cprev-title">${esc(t("colour_preview_task"))}</span>
+      <span class="cprev-who">${esc(initials(me()?.display_name || displayName()))}</span>
+      <span class="cprev-tick"></span>
+    </div>
+    <div class="cprev-row app">
+      <span class="cprev-nav">${esc(t("overview"))}</span>
+      <span class="btn btn-primary btn-sm">${esc(t("add"))}</span>
+    </div>
+  </div>`;
+}
+
+/* Two people in one list want two colours you can tell apart at a glance. */
+function colourClash(hex) {
+  const mine = colourParts(hex);
+  if (mine.f < 0.25) return null;
+  for (const m of state.members) {
+    if (m.user_id === state.user?.id) continue;
+    const theirs = memberColour(m);
+    if (theirs.f < 0.25) continue;
+    /* how far apart two hues are the short way round the wheel */
+    const d = Math.abs(((mine.h - theirs.h + 540) % 360) - 180);
+    if (d < 24) return m.display_name;
+  }
+  return null;
+}
+
+/* Repaint the dialog's own bits after a pick, without rebuilding it — a
+   dialog that jumps back to the top mid-decision is its own small cruelty. */
+function syncColourUI(id, hex) {
+  const { h, f } = colourParts(hex);
+  const row = document.querySelector(`.cpick[data-pick="${id}"]`);
+  if (row) {
+    const dot = row.querySelector(".cpick-dot");
+    if (dot) dot.style.background = hslHex(h, f, 40);
+    const field = row.querySelector(".cpick-hex");
+    if (field && document.activeElement !== field) field.value = hex;
+    const swatch = row.querySelector(`#cp-${id}`);
+    if (swatch && swatch.value.toUpperCase() !== hex) swatch.value = hex;
+    row.querySelectorAll(".cdot").forEach((d) => d.classList.toggle("on", d.dataset.hex === hex));
+  }
+  if (id === "mine") {
+    const prev = $("cprev");
+    if (prev) { prev.style.setProperty("--p", h); prev.style.setProperty("--pf", f.toFixed(3)); }
+    const warn = $("cp-warn");
+    if (warn) {
+      const clash = colourClash(hex);
+      warn.textContent = clash ? t("colour_close", { name: clash }) : "";
+      warn.classList.toggle("hidden", !clash);
+    }
+  }
+}
+
+function setAppColour(hex, persist) {
+  const ok = cleanHex(hex);
+  if (!ok) return;
+  appColour = ok;
+  applyAppColour(ok);
+  syncColourUI("app", ok);
+  if (persist) { try { localStorage.setItem("thelife-accent", ok); } catch {} }
+}
+
+async function saveMyColour(hex) {
+  const ok = cleanHex(hex);
+  if (!ok || !state.board) return;
+  const { h } = colourParts(ok);
+  const m = me();
+  if (m) { m.colour = ok; m.hue = h; }
+  syncColourUI("mine", ok);
+  renderApp();                         // the board behind the dialog, not the dialog
+  const { data, error } = await sb.from("board_members").update({ colour: ok, hue: h })
+    .eq("board_id", boardId()).eq("user_id", state.user.id).select("user_id");
+  if (error) toast(error.message);
+  else if (!data || !data.length) toast(t("err_schema_stale"));
+}
+
+const pickColour = (id, hex, persist) =>
+  (id === "app" ? setAppColour(hex, persist) : saveMyColour(hex));
 
 /* ------------------------------------------------------- calendar feed */
 
@@ -1825,7 +2010,8 @@ document.addEventListener("click", async (e) => {
     case "settings": closeMenu(); return settingsModal();
     case "suggest": return suggestModal();
     case "send-suggestion": return sendSuggestion();
-    case "set-hue": return saveMemberHue(+b.dataset.hue);
+    case "colour-preset": return pickColour(b.dataset.pick, b.dataset.hex, true);
+    case "colour-reset": return pickColour(b.dataset.pick, DEFAULT_COLOUR, true);
     case "remove-photo": return removeAvatar();
     case "set-lang": setLang(b.dataset.lang); return rerenderAfterLangOrTheme();
     case "set-theme": {
@@ -1988,7 +2174,35 @@ document.addEventListener("click", async (e) => {
 });
 
 /* show or hide the "count from completion" option with the repeat select */
+/* Dragging around a colour wheel should show you the answer while you drag.
+   The app colour is free to follow every flicker — it is only CSS variables
+   on this device. Your own colour waits for the picker to be let go, because
+   that one is a write to the board the other person is looking at. */
+document.addEventListener("input", (e) => {
+  const pick = e.target.dataset?.pick;
+  if (!pick) return;
+  if (e.target.type === "color") {
+    const hex = cleanHex(e.target.value);
+    if (!hex) return;
+    if (pick === "app") return setAppColour(hex, false);
+    return syncColourUI("mine", hex);
+  }
+  if (e.target.classList.contains("cpick-hex")) {
+    const hex = cleanHex(e.target.value);
+    if (!hex) return;
+    if (pick === "app") return setAppColour(hex, false);
+    return syncColourUI("mine", hex);
+  }
+});
+
 document.addEventListener("change", (e) => {
+  const pick = e.target.dataset?.pick;
+  if (pick && (e.target.type === "color" || e.target.classList.contains("cpick-hex"))) {
+    const hex = cleanHex(e.target.value);
+    if (hex) pickColour(pick, hex, true);
+    else syncColourUI(pick, pick === "app" ? appColour : myColourHex());   // typed nonsense, put it back
+    return;
+  }
   if (e.target.id === "m-nodate") {
     const date = $("m-date"), rec = $("m-rec");
     date.disabled = e.target.checked;

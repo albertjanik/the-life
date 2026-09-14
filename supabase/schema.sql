@@ -131,6 +131,10 @@ create table if not exists public.feedback (
 );
 create index if not exists feedback_created_idx on public.feedback (created_at desc);
 
+-- Added later: a person picks their own colour outright, not one of eight
+-- hues. The hue column stays in step with it so nothing older breaks.
+alter table public.board_members add column if not exists colour text;
+
 -- Added later: the calendar feed. A calendar app cannot sign in, so the long
 -- random token in the address is the key. One per person per board, thrown
 -- away and made again from Settings whenever you want.
