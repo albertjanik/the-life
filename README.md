@@ -78,12 +78,12 @@ GitHub Pages (**Settings → Pages → Source: GitHub Actions** — the workflow
 | Boards | Your boards, create a new one, or join one with an invite code |
 | Overview | Overdue / due today / closed so far / habits, what's next, and the section grid |
 | Tasks | One timeline: Overdue → Today → Tomorrow → This week → Next week → Later, cut to how far ahead you want to look — **today** by default, or a week, a month, a year, everything |
-| Calendar | Month view; the colour bar is the section, a red outline means the date has passed |
+| Calendar | Month view; a red outline means the date has passed |
 | Habits | 14-day grid, click any day (past days included), streaks; a habit ticked off today lights up in its owner's colour and says whose it is. Click a habit's name to rename it, move it, change how often or delete it |
 | Section | Tasks, notes, habits and history for that part of life |
 | Account | Your picture in the top-right corner: settings, sharing, switching boards and signing out |
 | Sharing | Invite code (the owner can roll it), who is on the board, and their roles |
-| Settings | Profile picture, your colour and the app colour, interface language (English / Polski), theme, your name on the board, the calendar link, password |
+| Settings | Profile picture, your colour and the menu colour, interface language (English / Polski), theme, your name on the board, the calendar link, password |
 
 ### Life sections
 
@@ -210,28 +210,27 @@ of a list and the page stretches, springs back on release, and reloads the board
 
 Tasks and habits carry the name and picture of whoever they are assigned to, and a row
 assigned to one person takes that person's colour: their tick, the flash when it is ticked
-off, and the tint a habit gets for the day. Shared rows keep the colour of their section.
+off, and the tint a habit gets for the day. Everything else wears the menu colour.
 
 ### Colours
 
-**Settings → Colours** has two of them, each a normal colour picker — the swatch opens the
-one your phone or laptop already uses, and next to it the hex is there if you know exactly
-what you want. Ten ready colours sit underneath for people who would rather just point, and
-the arrow puts it back to the green it started as.
+**Settings → Colours** is one framed line with two circles on it. Tapping either opens the
+colour picker your phone or laptop already has — full RGB, an eyedropper, whatever that
+picker offers — and the screen repaints while you drag.
 
 - **Your colour** — your initials, and the tasks and habits that are yours. It lives on the
   board, so the other person sees it too. Pick one close to theirs and a line says so; it
   does not stop you, it just points out that the two of you will be hard to tell apart.
-- **App colour** — buttons, the menu, the highlights, and the quiet tint the paper and the
-  text carry. This one is a choice about your own screen, like the theme, so it stays on the
-  device: one of you can run the board in plum and the other in green.
+- **Menu colour** — everything else, and that is meant literally: buttons, the menu, the
+  icons' backgrounds, the bar down the side of a task, the wash across a ticked habit, the
+  paper, the lines, the text and even the shadow under a card. Nothing anywhere is left in
+  another colour. This one is a choice about your own screen, like the theme, so it stays on
+  the device: one of you can run the board in plum and the other in green.
 
 Only the hue and how much colour it carries are taken from what you pick; how light or dark
 each thing is stays as the design set it. That is what keeps white text readable on a button
-and a pale note pale, whatever colour ends up behind them — no combination in the picker can
-drop the text below a legible contrast. The preview under the two rows shows a sample row in
-your colour; the app colour needs no preview, because the whole screen behind the dialog
-repaints while you drag.
+and a pale note pale, whatever colour ends up behind them — no colour the picker can produce
+drops text below a legible contrast.
 
 ### Small things that matter
 

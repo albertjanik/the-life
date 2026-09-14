@@ -293,17 +293,14 @@ function initials(name) {
   const parts = String(name || "?").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   return ((parts[0]?.[0] || "?") + (parts[1]?.[0] || "")).toUpperCase();
 }
-const memberHue = (id) => (id ? memberById(id)?.hue ?? 163 : null);
 const memberName = (id) => (id ? memberById(id)?.display_name || "" : t("by_shared"));
 
-/* A row belongs to whoever it is assigned to; shared rows keep the section colour. */
-const rowHue = (row, section) => (row.assignee_id ? memberHue(row.assignee_id) : section?.hue ?? 163);
-const rowColour = (row, section) =>
-  (row.assignee_id ? memberColour(memberById(row.assignee_id)) : { h: section?.hue ?? 163, f: 1 });
-/* the two custom properties a row needs to wear somebody's colour */
-const rowVars = (row, section) => {
-  const { h, f } = rowColour(row, section);
-  return `--h:${h};--hf:${f.toFixed(3)}`;
+/* A row assigned to somebody wears their colour; everything else inherits the
+   app colour, so no other colour is left anywhere in the app. */
+const rowVars = (row) => {
+  if (!row.assignee_id) return "";
+  const { h, f } = memberColour(memberById(row.assignee_id));
+  return `--h:${h};--hf:${f.toFixed(3)};`;
 };
 
 function avatarHTML(member, cls = "avatar") {
@@ -332,10 +329,10 @@ function renderAuth(msg, err) {
         <p>${esc(t("hero_lede"))}</p>
       </div>
       <div class="art-grid">
-        <div class="art-cell" style="--h:210"><div class="k">${esc(t("hero_car"))}</div><div class="v">${esc(t("hero_car_v"))}</div><div class="s">${esc(t("hero_car_s"))}</div></div>
-        <div class="art-cell" style="--h:38"><div class="k">${esc(t("hero_fin"))}</div><div class="v">${esc(t("hero_fin_v"))}</div><div class="s">${esc(t("hero_fin_s"))}</div></div>
-        <div class="art-cell" style="--h:230"><div class="k">${esc(t("hero_learn"))}</div><div class="v">${esc(t("hero_learn_v"))}</div><div class="s">${esc(t("hero_learn_s"))}</div></div>
-        <div class="art-cell" style="--h:196"><div class="k">${esc(t("hero_travel"))}</div><div class="v">${esc(t("hero_travel_v"))}</div><div class="s">${esc(t("hero_travel_s"))}</div></div>
+        <div class="art-cell"><div class="k">${esc(t("hero_car"))}</div><div class="v">${esc(t("hero_car_v"))}</div><div class="s">${esc(t("hero_car_s"))}</div></div>
+        <div class="art-cell"><div class="k">${esc(t("hero_fin"))}</div><div class="v">${esc(t("hero_fin_v"))}</div><div class="s">${esc(t("hero_fin_s"))}</div></div>
+        <div class="art-cell"><div class="k">${esc(t("hero_learn"))}</div><div class="v">${esc(t("hero_learn_v"))}</div><div class="s">${esc(t("hero_learn_s"))}</div></div>
+        <div class="art-cell"><div class="k">${esc(t("hero_travel"))}</div><div class="v">${esc(t("hero_travel_v"))}</div><div class="s">${esc(t("hero_travel_s"))}</div></div>
       </div>
     </div>
     <div class="auth-form">
@@ -377,7 +374,7 @@ function renderNewPassword(msg, err) {
         <p>${esc(t("set_new_password_lede"))}</p>
       </div>
       <div class="art-grid" style="grid-template-columns:1fr">
-        <div class="art-cell" style="--h:163"><div class="k">${esc(t("reminder"))}</div><div class="v">${esc(t("at_least_6"))}</div><div class="s">${esc(t("longer_better"))}</div></div>
+        <div class="art-cell"><div class="k">${esc(t("reminder"))}</div><div class="v">${esc(t("at_least_6"))}</div><div class="s">${esc(t("longer_better"))}</div></div>
       </div>
     </div>
     <div class="auth-form">
@@ -465,8 +462,8 @@ async function renderBoardPicker(err) {
         <p>${esc(t("boards_lede"))}</p>
       </div>
       <div class="art-grid" style="grid-template-columns:1fr">
-        <div class="art-cell" style="--h:163"><div class="k">${esc(t("role_owner"))}</div><div class="v">${esc(t("full_access"))}</div><div class="s">${esc(t("owner_desc"))}</div></div>
-        <div class="art-cell" style="--h:288"><div class="k">${esc(t("role_member"))}</div><div class="v">${esc(t("full_access"))}</div><div class="s">${esc(t("member_desc"))}</div></div>
+        <div class="art-cell"><div class="k">${esc(t("role_owner"))}</div><div class="v">${esc(t("full_access"))}</div><div class="s">${esc(t("owner_desc"))}</div></div>
+        <div class="art-cell"><div class="k">${esc(t("role_member"))}</div><div class="v">${esc(t("full_access"))}</div><div class="s">${esc(t("member_desc"))}</div></div>
       </div>
     </div>
     <div class="auth-form">
@@ -482,7 +479,7 @@ async function renderBoardPicker(err) {
       ${state.boards.length
         ? `<div class="panel-pick">${state.boards.map((b) => `
             <button class="board-row" data-act="open-board" data-id="${b.id}">
-              <span class="chip chip-lg" style="--h:163">${esc(initials(b.name))}</span>
+              <span class="chip chip-lg">${esc(initials(b.name))}</span>
               <span><span class="nm">${esc(b.name)}</span><br><span class="sub mono">${esc(b.invite_code)} · ${esc(b.role === "owner" ? t("role_owner") : t("role_member"))}</span></span>
             </button>`).join("")}</div>`
         : `<div class="empty">${esc(t("no_boards"))}</div>`}
@@ -893,13 +890,13 @@ function taskHTML(task, i = 0) {
   const s = secById(task.section_id);
   const n = task.due_date ? diff(task.due_date) : Infinity;
   const cls = !task.due_date ? "nd" : n < 0 ? "od" : n === 0 ? "td" : "";
-  const owner = task.assignee_id ? memberColour(memberById(task.assignee_id)) : { h: s.hue, f: 1 };
+  const ownerVars = rowVars(task).replace("--h:", "--p:").replace("--hf:", "--pf:");
   const steps = stepsOf(task.id);
   const hasMore = !!task.description || steps.length > 0;
   const open = state.expanded.has(task.id);
   const doneSteps = steps.filter((x) => x.done).length;
   return `<div class="task${task.done ? " done" : ""}${task.assignee_id ? " mine" : ""}${open ? " open" : ""}"
-    style="--h:${s.hue};--p:${owner.h};--pf:${owner.f.toFixed(3)};--i:${Math.min(i, 12)}" data-id="${task.id}">
+    style="${ownerVars}--i:${Math.min(i, 12)}" data-id="${task.id}">
     <div class="t-row">
       ${hasMore
         ? `<button class="t-main has-more" data-act="toggle-steps" data-id="${task.id}"
@@ -1012,7 +1009,7 @@ function viewOverview() {
         <button class="btn btn-ghost btn-sm" data-act="go" data-view="habits">${esc(t("all_habits"))}</button></div><div>
         ${habitsShown.length ? habitsShown.map((h, i) => `
           <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop === h.id + "|" + off(0) ? " just-done" : ""}"
-            style="${rowVars(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
+            style="${rowVars(h)}--i:${Math.min(i, 12)}" data-habit="${h.id}">
             <div class="hab-name">
               <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
               <div class="s">${esc(habitTarget(h))}</div></div>
@@ -1027,7 +1024,7 @@ function viewOverview() {
       const soon = openTasks().filter((x) => x.section_id === s.id && x.due_date)
         .sort((a, b) => (a.due_date < b.due_date ? -1 : 1))[0];
       const notes = state.notes.filter((x) => x.section_id === s.id).length;
-      return `<button class="sec-card" style="--h:${s.hue}" data-act="go" data-view="section" data-sec="${s.id}">
+      return `<button class="sec-card" data-act="go" data-view="section" data-sec="${s.id}">
         <div class="row" style="gap:9px"><span class="chip chip-lg emo">${esc(sectionIcon(s))}</span><span class="nm">${esc(sectionName(s))}</span></div>
         <div class="ln mono" style="font-size:12px">${esc(countLabel(n, "task_one", "task_many"))} · ${esc(countLabel(notes, "note_one", "note_many"))}</div>
         <div class="bar"><i style="width:${Math.min(100, n * 14 + 8)}%"></i></div>
@@ -1077,7 +1074,7 @@ function viewCalendar() {
     const key = iso(d), isOut = d.getMonth() !== mo, isToday = key === off(0);
     const evs = state.tasks.filter((x) => x.due_date === key && !x.done && whoOk(x));
     cells += `<div class="cal-day${isOut ? " out" : ""}${isToday ? " today" : ""}"><div class="cal-num">${d.getDate()}</div>
-      ${evs.slice(0, 3).map((x) => `<button class="cal-ev${diff(x.due_date) < 0 ? " od" : ""}" style="--h:${secById(x.section_id).hue}" data-act="edit-task" data-id="${x.id}" title="${esc(x.title)}">${esc(x.title)}</button>`).join("")}
+      ${evs.slice(0, 3).map((x) => `<button class="cal-ev${diff(x.due_date) < 0 ? " od" : ""}" data-act="edit-task" data-id="${x.id}" title="${esc(x.title)}">${esc(x.title)}</button>`).join("")}
       ${evs.length > 3 ? `<div class="cal-more">${esc(t("cal_more", { n: evs.length - 3 }))}</div>` : ""}</div>`;
   }
   return `<div class="row" style="justify-content:space-between;margin-bottom:14px">
@@ -1101,7 +1098,7 @@ function viewHabits() {
       <span class="hint mono" style="font-size:11px">${first.getDate()} ${esc(names().monthShort[first.getMonth()])} → ${esc(t("today"))}</span></div>
       <div>${visible.length ? visible.map((h, i) => `
         <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop && fx.pop.startsWith(h.id + "|") ? " just-done" : ""}"
-          style="${rowVars(h, secById(h.section_id))};--i:${Math.min(i, 12)}" data-habit="${h.id}">
+          style="${rowVars(h)}--i:${Math.min(i, 12)}" data-habit="${h.id}">
           <div class="hab-name">
             <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
             <div class="s"><button class="sec-link" data-act="go" data-view="section" data-sec="${h.section_id}">${esc(sectionName(secById(h.section_id)))}</button> · ${esc(habitTarget(h))}</div></div>
@@ -1129,7 +1126,7 @@ function viewSection(id) {
         <input type="text" id="nt-body" placeholder="${esc(t("note_text"))}" style="flex:2 1 260px;border:none;background:none">
         <button class="btn btn-primary btn-sm" data-act="add-note" data-sec="${id}">${esc(t("add_note"))}</button></div>` +
       (notes.length ? `<div class="notes">${notes.map((n) => `
-        <article class="note" style="--h:${s.hue}"><h4>${esc(n.title)}</h4><p>${esc(n.body)}</p>
+        <article class="note"><h4>${esc(n.title)}</h4><p>${esc(n.body)}</p>
           <div class="note-foot">${whoBadge(n.created_by)}<span>${human(String(n.created_at).slice(0, 10))}</span>
           <div class="spacer"></div><button class="del" style="opacity:1" data-act="del-note" data-id="${n.id}" aria-label="${esc(t("delete"))}">×</button></div>
         </article>`).join("")}</div>` : `<div class="empty">${esc(t("no_notes"))}</div>`);
@@ -1137,7 +1134,7 @@ function viewSection(id) {
     body = `<div class="card"><div class="card-head"><h2>${esc(t("habits_in_section"))}</h2></div><div>
       ${habs.length ? habs.map((h) => `
         <div class="hab${ticked(h, off(0)) ? " done-today" : ""}${fx.pop && fx.pop.startsWith(h.id + "|") ? " just-done" : ""}"
-          style="${rowVars(h, s)}" data-habit="${h.id}"><div class="hab-name">
+          style="${rowVars(h)}" data-habit="${h.id}"><div class="hab-name">
           <button class="n hab-open" data-act="edit-habit" data-id="${h.id}" title="${esc(t("edit_habit"))}">${esc(h.name)}</button>
           <div class="s">${esc(habitTarget(h))}</div></div>
           <span class="who-wrap corner" title="${esc(memberName(h.assignee_id))}">${whoBadge(h.assignee_id)}</span>
@@ -1147,7 +1144,7 @@ function viewSection(id) {
       <div class="card" style="margin-top:12px"><div class="card-head"><h2>${esc(t("history"))}</h2></div>
       <div class="card-body"><p style="margin:0;color:var(--ink-2)">${esc(t("closed_in_section", { n: doneN }))}</p></div></div>`;
   }
-  return `<div class="sec-head" style="--h:${s.hue}"><span class="chip chip-lg emo">${esc(sectionIcon(s))}</span>
+  return `<div class="sec-head"><span class="chip chip-lg emo">${esc(sectionIcon(s))}</span>
       <div style="flex:1;min-width:0"><h1>${esc(sectionName(s))}</h1><p>${esc(sectionDesc(s))}</p></div>
       <button class="btn btn-ghost btn-sm sec-del" data-act="del-section" data-id="${id}">${esc(t("delete_section"))}</button></div>
     <div class="row" style="justify-content:space-between"><div class="tabs">
@@ -1190,17 +1187,17 @@ function renderApp() {
         <span class="side-panel-sub">${esc(state.board.invite_code)}</span></span>
       </div>
       <div class="nav-group">${MAIN.map((m) => `
-        <button class="nav-item${state.view.type === m.k ? " active" : ""}" style="--h:${m.h}" data-act="go" data-view="${m.k}">
+        <button class="nav-item${state.view.type === m.k ? " active" : ""}" data-act="go" data-view="${m.k}">
           <span class="chip emo">${NAV_ICON[m.k]}</span>${esc(m.n)}<span class="nav-count">${counts[m.k]}</span></button>`).join("")}
       </div>
       <div class="nav-group">
         <div class="nav-title">${esc(t("life_sections"))}</div>
         ${state.sections.map((s) => {
           const n = state.tasks.filter((x) => x.section_id === s.id && !x.done).length;
-          return `<button class="nav-item${state.view.type === "section" && state.view.sec === s.id ? " active" : ""}" style="--h:${s.hue}" data-act="go" data-view="section" data-sec="${s.id}">
+          return `<button class="nav-item${state.view.type === "section" && state.view.sec === s.id ? " active" : ""}" data-act="go" data-view="section" data-sec="${s.id}">
             <span class="chip emo">${esc(sectionIcon(s))}</span>${esc(sectionName(s))}<span class="nav-count">${n || ""}</span></button>`;
         }).join("")}
-        <button class="nav-item" style="--h:163" data-act="new-section"><span class="chip emo">➕</span>${esc(t("new_section"))}</button>
+        <button class="nav-item" data-act="new-section"><span class="chip emo">➕</span>${esc(t("new_section"))}</button>
       </div>
 
     </aside>
@@ -1312,11 +1309,11 @@ function addMenuModal() {
       <button class="del" style="opacity:1" data-act="close">×</button></div>
     <div class="modal-body">
       <div class="pick-pair">
-        <button class="pick-tile" style="--h:38" data-act="pick-task">
+        <button class="pick-tile" data-act="pick-task">
           <span class="pick-name">${esc(t("a_task").toUpperCase())}</span>
           <span class="pick-desc">${esc(t("a_task_desc"))}</span>
         </button>
-        <button class="pick-tile" style="--h:295" data-act="pick-habit">
+        <button class="pick-tile" data-act="pick-habit">
           <span class="pick-name">${esc(t("a_habit").toUpperCase())}</span>
           <span class="pick-desc">${esc(t("a_habit_desc"))}</span>
         </button>
@@ -1718,15 +1715,11 @@ function settingsModal() {
         </div>
       </div>
       <div><label>${esc(t("colours"))}</label>
-        ${colourPickerHTML({
-          id: "mine", title: t("your_colour"), sub: t("your_colour_sub"),
-          value: myColourHex(), disabled: !state.board
-        })}
-        ${colourPickerHTML({
-          id: "app", title: t("app_colour"), sub: t("app_colour_sub"),
-          value: appColour, disabled: false
-        })}
-        ${colourPreviewHTML()}
+        <div class="cpicks">
+          ${colourPickerHTML({ id: "mine", title: t("your_colour"), value: myColourHex(), disabled: !state.board })}
+          ${colourPickerHTML({ id: "app", title: t("app_colour"), value: appColour, disabled: false })}
+        </div>
+        <p class="cpick-warn hidden" id="cp-warn"></p>
       </div>
       <div><label>${esc(t("language"))}</label>
         <div class="filters" style="margin-top:6px">
@@ -1755,11 +1748,6 @@ function settingsModal() {
 
 /* ----------------------------------------------------------- colours UI */
 
-/* Eight ready answers for people who do not want to hunt through a colour
-   wheel; the wheel is one tap away for people who do. */
-const COLOUR_PRESETS = [163, 196, 230, 275, 320, 8, 32, 96]
-  .map((h) => toHex(h, BASE_SAT, 40));
-
 function myColourHex() {
   const m = me();
   const picked = cleanHex(m?.colour);
@@ -1768,11 +1756,10 @@ function myColourHex() {
   return toHex(h, f * BASE_SAT, 40);
 }
 
-/* One row: a big swatch that opens the system colour picker, the hex for
-   people who know exactly what they want, presets, and a way back to the
-   default. The swatch is a real <input type="color">, so on every phone and
-   laptop it is the picker people already know. */
-function colourPickerHTML({ id, title, sub, value, disabled }) {
+/* Two circles on one line. Each is a real <input type="color">, so tapping it
+   opens the picker the phone or the laptop already has — nothing to invent,
+   nothing to explain. */
+function colourPickerHTML({ id, title, value, disabled }) {
   const hex = cleanHex(value) || DEFAULT_COLOUR;
   const { h, f } = colourParts(hex);
   return `<div class="cpick${disabled ? " off" : ""}" data-pick="${id}">
@@ -1780,34 +1767,7 @@ function colourPickerHTML({ id, title, sub, value, disabled }) {
       <input type="color" id="cp-${id}" value="${hex}" data-pick="${id}"
         aria-label="${esc(title)}"${disabled ? " disabled" : ""}>
     </label>
-    <div class="cpick-text"><div class="nm">${esc(title)}</div><div class="sub">${esc(sub)}</div></div>
-    <input class="cpick-hex mono" id="ch-${id}" value="${hex}" data-pick="${id}"
-      spellcheck="false" autocomplete="off" maxlength="7" aria-label="${esc(title)} — hex"${disabled ? " disabled" : ""}>
-    <button class="cpick-reset" data-act="colour-reset" data-pick="${id}"
-      title="${esc(t("colour_default"))}" aria-label="${esc(t("colour_default"))}">↺</button>
-    <div class="cpick-presets">${COLOUR_PRESETS.map((c) =>
-      `<button class="cdot${c === hex ? " on" : ""}" style="background:${c}"
-        data-act="colour-preset" data-pick="${id}" data-hex="${c}" aria-label="${c}"></button>`).join("")}</div>
-    ${id === "mine" ? `<p class="cpick-warn hidden" id="cp-warn"></p>` : ""}
-  </div>`;
-}
-
-/* You are changing how the board looks, so the board is what you should be
-   looking at. The app colour repaints everything live behind this dialog;
-   this strip is here for your own colour, which only shows on your rows. */
-function colourPreviewHTML() {
-  const { h, f } = colourParts(myColourHex());
-  return `<div class="cprev" id="cprev" style="--p:${h};--pf:${f.toFixed(3)}">
-    <div class="cprev-cap">${esc(t("colour_preview"))}</div>
-    <div class="cprev-row">
-      <span class="cprev-title">${esc(t("colour_preview_task"))}</span>
-      <span class="cprev-who">${esc(initials(me()?.display_name || displayName()))}</span>
-      <span class="cprev-tick"></span>
-    </div>
-    <div class="cprev-row app">
-      <span class="cprev-nav">${esc(t("overview"))}</span>
-      <span class="btn btn-primary btn-sm">${esc(t("add"))}</span>
-    </div>
+    <span class="cpick-nm">${esc(title)}</span>
   </div>`;
 }
 
@@ -1826,23 +1786,21 @@ function colourClash(hex) {
   return null;
 }
 
-/* Repaint the dialog's own bits after a pick, without rebuilding it — a
-   dialog that jumps back to the top mid-decision is its own small cruelty. */
+/* Repaint the circle after a pick without rebuilding the dialog — one that
+   jumps back to the top mid-decision is its own small cruelty. */
 function syncColourUI(id, hex) {
   const { h, f } = colourParts(hex);
   const row = document.querySelector(`.cpick[data-pick="${id}"]`);
   if (row) {
     const dot = row.querySelector(".cpick-dot");
     if (dot) dot.style.background = hslHex(h, f, 40);
-    const field = row.querySelector(".cpick-hex");
-    if (field && document.activeElement !== field) field.value = hex;
     const swatch = row.querySelector(`#cp-${id}`);
     if (swatch && swatch.value.toUpperCase() !== hex) swatch.value = hex;
-    row.querySelectorAll(".cdot").forEach((d) => d.classList.toggle("on", d.dataset.hex === hex));
   }
   if (id === "mine") {
-    const prev = $("cprev");
-    if (prev) { prev.style.setProperty("--p", h); prev.style.setProperty("--pf", f.toFixed(3)); }
+    /* your initials are sitting at the top of this very dialog */
+    const av = document.querySelector("#modal-root .avatar.av-xl:not(.has-photo)");
+    if (av) av.style.background = hslHex(h, f, 35);
     const warn = $("cp-warn");
     if (warn) {
       const clash = colourClash(hex);
@@ -2010,8 +1968,6 @@ document.addEventListener("click", async (e) => {
     case "settings": closeMenu(); return settingsModal();
     case "suggest": return suggestModal();
     case "send-suggestion": return sendSuggestion();
-    case "colour-preset": return pickColour(b.dataset.pick, b.dataset.hex, true);
-    case "colour-reset": return pickColour(b.dataset.pick, DEFAULT_COLOUR, true);
     case "remove-photo": return removeAvatar();
     case "set-lang": setLang(b.dataset.lang); return rerenderAfterLangOrTheme();
     case "set-theme": {
@@ -2187,20 +2143,13 @@ document.addEventListener("input", (e) => {
     if (pick === "app") return setAppColour(hex, false);
     return syncColourUI("mine", hex);
   }
-  if (e.target.classList.contains("cpick-hex")) {
-    const hex = cleanHex(e.target.value);
-    if (!hex) return;
-    if (pick === "app") return setAppColour(hex, false);
-    return syncColourUI("mine", hex);
-  }
 });
 
 document.addEventListener("change", (e) => {
   const pick = e.target.dataset?.pick;
-  if (pick && (e.target.type === "color" || e.target.classList.contains("cpick-hex"))) {
+  if (pick && e.target.type === "color") {
     const hex = cleanHex(e.target.value);
     if (hex) pickColour(pick, hex, true);
-    else syncColourUI(pick, pick === "app" ? appColour : myColourHex());   // typed nonsense, put it back
     return;
   }
   if (e.target.id === "m-nodate") {

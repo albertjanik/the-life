@@ -6,6 +6,8 @@
    trick colours a section (--h / --hf) and a person (--p / --pf). */
 :root{
   --ah:164; --af:1;
+  /* anything that is not somebody's own row wears the app colour */
+  --h:var(--ah); --hf:var(--af);
   --paper:hsl(var(--ah) calc(var(--af) * 14%) 92%);
   --surface:#FFFFFF;
   --surface-2:hsl(var(--ah) calc(var(--af) * 20%) 95%);
@@ -23,10 +25,11 @@
   --warn:#9C6510;
   --warn-soft:#F6E7CC;
   --ok:var(--accent);
-  --shadow:0 1px 2px rgba(21,27,24,.06), 0 8px 24px -12px rgba(21,27,24,.18);
-  --cat-fg:hsl(var(--h,163) calc(var(--hf,1) * 42%) 30%);
-  --cat-bg:hsl(var(--h,163) calc(var(--hf,1) * 34%) 90%);
-  --cat-line:hsl(var(--h,163) calc(var(--hf,1) * 30%) 78%);
+  --shadow:0 1px 2px color-mix(in srgb, var(--ink) 7%, transparent),
+           0 8px 24px -12px color-mix(in srgb, var(--ink) 20%, transparent);
+  --cat-fg:hsl(var(--h) calc(var(--hf) * 42%) 30%);
+  --cat-bg:hsl(var(--h) calc(var(--hf) * 34%) 90%);
+  --cat-line:hsl(var(--h) calc(var(--hf) * 30%) 78%);
   --r:10px;
 }
 @media (prefers-color-scheme: dark){
@@ -49,9 +52,9 @@
     --warn-soft:#372A16;
     --ok:var(--accent);
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.7);
-    --cat-fg:hsl(var(--h,163) calc(var(--hf,1) * 45%) 66%);
-    --cat-bg:hsl(var(--h,163) calc(var(--hf,1) * 26%) 18%);
-    --cat-line:hsl(var(--h,163) calc(var(--hf,1) * 24%) 28%);
+    --cat-fg:hsl(var(--h) calc(var(--hf) * 45%) 66%);
+    --cat-bg:hsl(var(--h) calc(var(--hf) * 26%) 18%);
+    --cat-line:hsl(var(--h) calc(var(--hf) * 24%) 28%);
   }
 }
 :root[data-theme="dark"]{
@@ -73,9 +76,9 @@
   --warn-soft:#372A16;
   --ok:var(--accent);
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.7);
-  --cat-fg:hsl(var(--h,163) calc(var(--hf,1) * 45%) 66%);
-  --cat-bg:hsl(var(--h,163) calc(var(--hf,1) * 26%) 18%);
-  --cat-line:hsl(var(--h,163) calc(var(--hf,1) * 24%) 28%);
+  --cat-fg:hsl(var(--h) calc(var(--hf) * 45%) 66%);
+  --cat-bg:hsl(var(--h) calc(var(--hf) * 26%) 18%);
+  --cat-line:hsl(var(--h) calc(var(--hf) * 24%) 28%);
 }
 
 *{box-sizing:border-box}
@@ -352,7 +355,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 .bar i{display:block;height:100%;background:var(--cat-fg);border-radius:3px}
 
 /* ---------- modal ---------- */
-.overlay{position:fixed;inset:0;background:rgba(10,16,13,.5);display:grid;place-items:center;padding:18px;z-index:60}
+.overlay{position:fixed;inset:0;background:color-mix(in srgb, var(--ink) 55%, transparent);display:grid;place-items:center;padding:18px;z-index:60}
 .modal{background:var(--surface);border:1px solid var(--line);border-radius:14px;width:min(520px,100%);max-height:88vh;overflow:auto;box-shadow:0 24px 60px -20px rgba(0,0,0,.5)}
 .modal-head{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
 .modal-head h2{font-size:17px}
@@ -527,87 +530,33 @@ label.check input{width:auto}
 .avatar.av-xl{ width:62px;height:62px;font-size:22px;margin-left:0;border-width:0 }
 .who-shared{ color:#fff }
 /* ================= picking a colour ================= */
-/* Two rows, the same shape: a big swatch that opens the system colour picker,
-   the hex for people who already know the answer, ten ready ones, and a way
-   back to the default. */
-.cpick{
-  display:grid;gap:8px 10px;align-items:center;margin-top:8px;
-  grid-template-columns:auto minmax(0,1fr) auto auto;
-  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;
+/* Two circles in one framed row. Each opens the colour picker the device
+   already has, so there is nothing else to learn and nothing else to read. */
+.cpicks{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;
 }
-.cpick + .cpick{ margin-top:8px }
-.cpick.off{ opacity:.5;pointer-events:none }
+.cpick{ display:flex;align-items:center;gap:9px;flex:0 1 auto;min-width:0 }
+.cpick.off{ opacity:.45;pointer-events:none }
 .cpick-dot{
-  width:38px;height:38px;border-radius:50%;position:relative;overflow:hidden;cursor:pointer;
+  width:30px;height:30px;border-radius:50%;position:relative;overflow:hidden;cursor:pointer;flex:none;
   box-shadow:0 0 0 1px var(--line-2), inset 0 1px 2px rgba(0,0,0,.18);
-  transition:transform .14s var(--ease), box-shadow .14s;
+  transition:transform .14s var(--ease);
 }
-.cpick-dot:hover{ transform:scale(1.05) }
+.cpick-dot:hover{ transform:scale(1.08) }
 .cpick-dot:focus-within{ box-shadow:0 0 0 2px var(--accent), 0 0 0 5px var(--accent-soft) }
-/* the native picker, stretched under the swatch so the whole circle opens it */
+/* the native picker, stretched under the circle so the whole circle opens it */
 .cpick-dot input[type=color]{
   position:absolute;inset:-6px;width:calc(100% + 12px);height:calc(100% + 12px);
   padding:0;border:none;background:none;opacity:0;cursor:pointer;
 }
-.cpick-text{ min-width:0 }
-.cpick-text .nm{ font-weight:600;font-size:14px;line-height:1.25 }
-.cpick-text .sub{ font-size:12.5px;color:var(--ink-3);line-height:1.3 }
-.cpick-hex{
-  width:9ch;flex:none;text-align:center;padding:6px 4px;font-size:13px;letter-spacing:.02em;
-  text-transform:uppercase;
-}
-.cpick-reset{
-  width:30px;height:30px;border-radius:8px;border:1px solid var(--line-2);color:var(--ink-2);
-  display:grid;place-items:center;font-size:15px;line-height:1;transition:background .14s,color .14s;
-}
-.cpick-reset:hover{ background:var(--surface);color:var(--ink) }
-.cpick-presets{ grid-column:1 / -1;display:flex;gap:7px;flex-wrap:wrap }
-.cdot{
-  width:24px;height:24px;border-radius:50%;border:2px solid transparent;
-  box-shadow:0 0 0 1px var(--line-2);transition:transform .14s var(--ease), border-color .14s;
-}
-.cdot:hover{ transform:scale(1.14) }
-.cdot.on{ border-color:var(--surface-2);box-shadow:0 0 0 2px var(--ink) }
-.cpick-warn{
-  grid-column:1 / -1;margin:0;font-size:12.5px;color:var(--warn);
-}
-/* On a phone the hex box would squeeze the description into a column of
-   single words, so it moves to its own line under the name. */
-@media (max-width:560px){
-  .cpick{ grid-template-columns:auto minmax(0,1fr) auto }
-  .cpick-dot{ grid-column:1;grid-row:1;width:34px;height:34px }
-  .cpick-text{ grid-column:2;grid-row:1 }
-  .cpick-reset{ grid-column:3;grid-row:1 }
-  .cpick-hex{ grid-column:1 / -1;grid-row:2;width:100%;max-width:none;text-align:left;padding-left:10px }
-  .cpick-presets{ grid-row:3;justify-content:space-between;gap:6px }
-  .cpick-warn{ grid-row:4 }
-}
-
-/* what your own colour will look like on a row; the app colour repaints the
-   whole screen behind the dialog, so it needs no box of its own */
-.cprev{
-  margin-top:10px;border:1px dashed var(--line-2);border-radius:var(--r);padding:10px 12px;
-  display:flex;flex-direction:column;gap:8px;
-}
-.cprev-cap{
-  font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
-  font-family:"IBM Plex Mono",monospace;
-}
-.cprev-row{ display:flex;align-items:center;gap:9px }
-.cprev-title{ font-weight:600;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
-.cprev-who{
-  width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;
-  font-size:10px;font-weight:600;color:#fff;font-family:"IBM Plex Mono",monospace;
-  background:hsl(var(--p,163) calc(var(--pf,1) * 42%) 35%);
-}
-.cprev-tick{
-  width:20px;height:20px;border-radius:6px;flex:none;
-  background:hsl(var(--p,163) calc(var(--pf,1) * 45%) 36%);
-}
-.cprev-row.app{ border-top:1px solid var(--line);padding-top:8px }
-.cprev-nav{
-  flex:1;font-size:13.5px;font-weight:600;padding:5px 9px;border-radius:8px;
-  background:var(--accent-soft);color:var(--ink);
+.cpick-nm{ font-size:13.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+.cpick-warn{ margin:6px 0 0;font-size:12.5px;color:var(--warn) }
+/* on the narrowest phones the two still share a line, just a shade tighter */
+@media (max-width:400px){
+  .cpicks{ gap:8px;padding:10px }
+  .cpick{ gap:8px }
+  .cpick-nm{ font-size:13px }
 }
 
 /* ================= account button + menu ================= */
@@ -839,7 +788,7 @@ button,.task,.hab,.cal-day,.nav-item,.fchip,.tab,.chip,.avatar,.who,label.check{
 
 .drawer-wrap{ position:fixed;inset:0;z-index:75 }
 .drawer-scrim{
-  position:absolute;inset:0;background:rgba(10,16,13,.42);opacity:0;transition:opacity .24s var(--ease);
+  position:absolute;inset:0;background:color-mix(in srgb, var(--ink) 46%, transparent);opacity:0;transition:opacity .24s var(--ease);
 }
 .drawer{
   position:absolute;top:0;left:0;bottom:0;width:min(292px,86vw);background:var(--surface);
